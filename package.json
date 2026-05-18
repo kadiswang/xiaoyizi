@@ -14,7 +14,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "@aws-sdk/client-ec2": "^3.995.0",
     "@aws-sdk/client-lightsail": "^3.995.0",

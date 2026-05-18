@@ -1,5 +1,39 @@
 # Changelog
 
+## v4.2.0 (2026-05)
+
+### 新功能
+
+- **TG 解绑**：用户可在面板自助解绑 Telegram（点击导航栏蓝色 TG 图标）
+- **TG 未签到自动冻结**：30 天未在 TG 签到的绑定用户自动冻结，签到一次自动解冻（替代旧的"未登录冻结"和"一键禁用不活跃用户"）
+- **探针开放**：探针监控页面（`/monitor`）从仅管理员可见调整为所有登录用户可见
+
+### Bug 修复
+
+- **修复 AWS 换 IP 误报失败**：`notify.ops()` 在通知开关关闭时返回 `undefined` 导致 `.catch()` 报 TypeError，HTTP 返回 500，但实际 IP 已成功更换。现 `notify` 所有方法统一返回 Promise
+- **修复 traffic 外键崩溃**：删除节点/用户后 Agent 仍上报旧数据触发外键约束，导致进程崩溃。现 `recordTraffic` 失败时记录 debug 日志而非抛出
+- **修复 scrypt DoS 风险**：`verifyPassword` 限制 N/r/p 参数范围（N ≤ 2^20, r ≤ 16, p ≤ 4），防止篡改数据库哈希导致 CPU/内存 DoS
+
+### AWS 区域
+
+- 新增亚太区域：`ap-southeast-3` 雅加达、`ap-southeast-4` 墨尔本、**`ap-southeast-5` 吉隆坡**、`ap-southeast-7` 曼谷、`ap-south-2` 海得拉巴
+- 新增美洲：`ca-west-1` 加拿大西部、`mx-central-1` 墨西哥
+- 新增欧洲：`eu-central-2` 苏黎世、`eu-south-1` 米兰、`eu-south-2` 西班牙
+- 新增中东非洲：`me-central-1` 阿联酋、`il-central-1` 以色列、`af-south-1` 开普敦
+- 前端区域下拉框按地理位置分组显示
+
+### UI
+
+- 已绑定 TG 的图标从勾号改为蓝色 TG 图标（避免歧义）
+- 修复弹窗使用 Tailwind JIT 任意值 class 在预编译 CSS 中不生效的问题（`z-[999]` / `bg-[#1a1520]` 改为 inline style）
+
+### 其他
+
+- 删除"🚫 一键禁用不活跃用户"功能（被 TG 未签到策略替代）
+- 删除"未登录自动冻结"配置项（被 TG 未签到策略替代）
+
+---
+
 ## v4.1.1 (2026-03-17)
 
 ### Bug 修复

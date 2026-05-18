@@ -42,7 +42,7 @@ curl -I https://你的域名
 
 ## 7. Telegram Bot
 
-`/start`、`/checkin`、`/flip`、`/rps`、`/lucky`、`/me` 均正常。
+`/start`、`/checkin`、`/flip`、`/rps`、`/lucky`、`/me`、`/sub`、`/traffic`、`/nodes` 均正常。绑定流程：先在面板点击导航栏 TG 图标 → 跳转 Bot → `/start bind_<token>` 自动绑定。
 
 ## 8. Agent
 

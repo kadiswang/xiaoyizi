@@ -1,13 +1,8 @@
 node_modules/
 data/
-backups/
 .env
-.env.local
 *.log
-*.db
-*.db-shm
-*.db-wal
+
+backups/*.db
+database.db
 .plan.md
-.DS_Store
-.idea/
-.vscode/
