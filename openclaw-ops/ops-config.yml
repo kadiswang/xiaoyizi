@@ -1,0 +1,25 @@
+# OpenClaw 运维策略参考值
+#
+# 说明：
+# - 这是策略参考，不是调度器
+# - 实际调度由 OpenClaw 原生 heartbeat 完成
+# - heartbeat 周期请看 ~/.openclaw/openclaw.json 中的 agents.defaults.heartbeat
+
+target_nodes: 0
+aws_type: lightsail
+aws_bundle: nano_3_0
+aws_blueprint: debian_12
+aws_regions:
+  - ap-northeast-1
+  - ap-southeast-1
+  - ap-northeast-2
+
+heartbeat_every: 30m
+auto_swap_ip: true
+auto_repair: true
+auto_scale: false
+panel_guard: true
+
+max_daily_swaps: 10
+max_daily_creates: 3
+require_confirm: false
