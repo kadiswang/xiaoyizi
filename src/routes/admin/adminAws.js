@@ -177,6 +177,38 @@ router.get('/aws/all-instances', async (req, res) => {
   }
 });
 
+// 获取所有 AWS 区域元信息和当前启用列表
+router.get('/aws/regions', (req, res) => {
+  let enabled = aws.ALL_AWS_REGIONS; // 默认全部启用
+  try {
+    const raw = db.getSetting('aws_enabled_regions');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) enabled = parsed;
+    }
+  } catch (_) { /* 配置损坏忽略 */ }
+  res.json({
+    all: aws.ALL_AWS_REGIONS,
+    meta: aws.AWS_REGION_META,
+    enabled,
+  });
+});
+
+// 保存启用的区域列表
+router.post('/aws/regions', (req, res) => {
+  const { regions } = req.body || {};
+  if (!Array.isArray(regions)) {
+    return res.status(400).json({ error: '参数 regions 必须为数组' });
+  }
+  // 仅允许已知区域
+  const valid = regions.filter(r => aws.ALL_AWS_REGIONS.includes(r));
+  db.setSetting('aws_enabled_regions', JSON.stringify(valid));
+  // 清缓存让下次刷新立即生效
+  _awsInstancesCache = { data: null, ts: 0 };
+  db.addAuditLog(req.user.id, 'aws_enabled_regions', `更新启用区域: ${valid.length} 个`, req.clientIp || req.ip);
+  res.json({ ok: true, count: valid.length });
+});
+
 router.post('/aws/start', async (req, res) => {
   const { instanceId, region, type, accountId } = req.body;
   if (!instanceId) return res.status(400).json({ error: '缺少 instanceId' });

@@ -6,6 +6,79 @@ const db = require('./database');
 const logger = require('./logger');
 const { encrypt, decrypt } = require('../utils/crypto');
 
+// ========== AWS 区域常量 ==========
+
+// 所有支持的 AWS 商用区域（按地理分组），用于实例查询
+const ALL_AWS_REGIONS = [
+  // 美洲
+  'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
+  'ca-central-1', 'ca-west-1',
+  'mx-central-1',
+  'sa-east-1',
+  // 欧洲
+  'eu-west-1', 'eu-west-2', 'eu-west-3',
+  'eu-central-1', 'eu-central-2',
+  'eu-north-1',
+  'eu-south-1', 'eu-south-2',
+  // 亚太
+  'ap-east-1', 'ap-east-2',
+  'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3',
+  'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-4', 'ap-southeast-5', 'ap-southeast-7',
+  'ap-south-1', 'ap-south-2',
+  // 中东与非洲
+  'me-south-1', 'me-central-1',
+  'il-central-1',
+  'af-south-1',
+];
+
+// Lightsail 支持的区域（子集），需要单独维护
+// 参考 https://docs.aws.amazon.com/general/latest/gr/lightsail.html
+const LIGHTSAIL_REGIONS = new Set([
+  'us-east-1', 'us-east-2', 'us-west-2',
+  'ca-central-1',
+  'eu-west-1', 'eu-west-2', 'eu-west-3', 'eu-central-1', 'eu-north-1',
+  'ap-northeast-1', 'ap-northeast-2',
+  'ap-south-1',
+  'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-5',
+]);
+
+// 区域元信息：分组 + 中文名（供前端展示）
+const AWS_REGION_META = {
+  'us-east-1':      { group: '美洲',     name: '弗吉尼亚 N.', lightsail: true  },
+  'us-east-2':      { group: '美洲',     name: '俄亥俄',       lightsail: true  },
+  'us-west-1':      { group: '美洲',     name: '北加州',       lightsail: false },
+  'us-west-2':      { group: '美洲',     name: '俄勒冈',       lightsail: true  },
+  'ca-central-1':   { group: '美洲',     name: '加拿大中部',   lightsail: true  },
+  'ca-west-1':      { group: '美洲',     name: '加拿大西部',   lightsail: false },
+  'mx-central-1':   { group: '美洲',     name: '墨西哥',       lightsail: false },
+  'sa-east-1':      { group: '美洲',     name: '圣保罗',       lightsail: false },
+  'eu-west-1':      { group: '欧洲',     name: '爱尔兰',       lightsail: true  },
+  'eu-west-2':      { group: '欧洲',     name: '伦敦',         lightsail: true  },
+  'eu-west-3':      { group: '欧洲',     name: '巴黎',         lightsail: true  },
+  'eu-central-1':   { group: '欧洲',     name: '法兰克福',     lightsail: true  },
+  'eu-central-2':   { group: '欧洲',     name: '苏黎世',       lightsail: false },
+  'eu-north-1':     { group: '欧洲',     name: '斯德哥尔摩',   lightsail: true  },
+  'eu-south-1':     { group: '欧洲',     name: '米兰',         lightsail: false },
+  'eu-south-2':     { group: '欧洲',     name: '西班牙',       lightsail: false },
+  'ap-east-1':      { group: '亚太',     name: '香港',         lightsail: false },
+  'ap-east-2':      { group: '亚太',     name: '台北',         lightsail: false },
+  'ap-northeast-1': { group: '亚太',     name: '东京',         lightsail: true  },
+  'ap-northeast-2': { group: '亚太',     name: '首尔',         lightsail: true  },
+  'ap-northeast-3': { group: '亚太',     name: '大阪',         lightsail: false },
+  'ap-southeast-1': { group: '亚太',     name: '新加坡',       lightsail: true  },
+  'ap-southeast-2': { group: '亚太',     name: '悉尼',         lightsail: true  },
+  'ap-southeast-3': { group: '亚太',     name: '雅加达',       lightsail: true  },
+  'ap-southeast-4': { group: '亚太',     name: '墨尔本',       lightsail: false },
+  'ap-southeast-5': { group: '亚太',     name: '吉隆坡',       lightsail: true  },
+  'ap-southeast-7': { group: '亚太',     name: '曼谷',         lightsail: false },
+  'ap-south-1':     { group: '亚太',     name: '孟买',         lightsail: true  },
+  'ap-south-2':     { group: '亚太',     name: '海得拉巴',     lightsail: false },
+  'me-south-1':     { group: '中东与非洲', name: '巴林',       lightsail: false },
+  'me-central-1':   { group: '中东与非洲', name: '阿联酋',     lightsail: false },
+  'il-central-1':   { group: '中东与非洲', name: '以色列',     lightsail: false },
+  'af-south-1':     { group: '中东与非洲', name: '开普敦',     lightsail: false },
+};
+
 // ========== 配置管理 ==========
 
 function getAwsConfig(accountId) {
@@ -568,32 +641,20 @@ async function listAllInstances() {
   }
 
   const results = [];
-  // AWS 商用区域列表（含较新区域如吉隆坡、曼谷、墨西哥等）
-  const REGIONS = [
-    // 美洲
-    'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-    'ca-central-1', 'ca-west-1',
-    'mx-central-1',
-    'sa-east-1',
-    // 欧洲
-    'eu-west-1', 'eu-west-2', 'eu-west-3',
-    'eu-central-1', 'eu-central-2',
-    'eu-north-1',
-    'eu-south-1', 'eu-south-2',
-    // 亚太
-    'ap-east-1', 'ap-east-2',
-    'ap-northeast-1', 'ap-northeast-2', 'ap-northeast-3',
-    'ap-southeast-1', 'ap-southeast-2', 'ap-southeast-3', 'ap-southeast-4', 'ap-southeast-5', 'ap-southeast-7',
-    'ap-south-1', 'ap-south-2',
-    // 中东与非洲
-    'me-south-1', 'me-central-1',
-    'il-central-1',
-    'af-south-1',
-  ];
+  // 决定要查询的区域：若 settings 里配置了启用列表则用之，否则用全集
+  let enabledRegions = null;
+  try {
+    const raw = db.getSetting('aws_enabled_regions');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) enabledRegions = parsed;
+    }
+  } catch (_) { /* 配置损坏忽略，回退到全集 */ }
+  const REGIONS = enabledRegions || ALL_AWS_REGIONS;
 
   for (const account of accounts) {
     const accountResult = { accountId: account.id, accountName: account.name, instances: [] };
-    // 每个账号查询所有区域
+    // 每个账号查询启用的区域
     const regionList = [account.default_region || 'us-east-1', ...REGIONS.filter(r => r !== (account.default_region || 'us-east-1'))];
     const uniqueRegions = [...new Set(regionList)];
 
@@ -613,24 +674,27 @@ async function listAllInstances() {
           });
         }
       } catch (e) { /* 区域无权限等忽略 */ }
-      try {
-        const lsList = await listLightsailInstances(region, account.id);
-        for (const inst of lsList) {
-          const node = nodeMap[`${account.id}:${inst.region || region}:${inst.instanceName}`];
-          regionInstances.push({
-            instanceId: inst.instanceName,
-            name: inst.instanceName,
-            state: inst.state,
-            publicIp: inst.publicIp,
-            region: inst.region || region,
-            instanceType: 'lightsail',
-            bundleId: inst.bundleId,
-            accountId: account.id,
-            accountName: account.name,
-            boundNode: node ? { id: node.id, name: node.name, host: node.host, remark: node.remark, is_active: node.is_active } : null
-          });
-        }
-      } catch (e) { /* 忽略 */ }
+      // Lightsail 仅在支持的区域调用（避免不必要的报错和延迟）
+      if (LIGHTSAIL_REGIONS.has(region)) {
+        try {
+          const lsList = await listLightsailInstances(region, account.id);
+          for (const inst of lsList) {
+            const node = nodeMap[`${account.id}:${inst.region || region}:${inst.instanceName}`];
+            regionInstances.push({
+              instanceId: inst.instanceName,
+              name: inst.instanceName,
+              state: inst.state,
+              publicIp: inst.publicIp,
+              region: inst.region || region,
+              instanceType: 'lightsail',
+              bundleId: inst.bundleId,
+              accountId: account.id,
+              accountName: account.name,
+              boundNode: node ? { id: node.id, name: node.name, host: node.host, remark: node.remark, is_active: node.is_active } : null
+            });
+          }
+        } catch (e) { /* 忽略 */ }
+      }
       return regionInstances;
     });
 
@@ -653,5 +717,6 @@ module.exports = {
   startLightsailInstance, stopLightsailInstance, terminateLightsailInstance,
   swapNodeIp,
   getLatestUbuntuAmi, launchEC2Instance, launchLightsailInstance,
-  waitForInstanceRunning, tagInstance, listAllInstances
+  waitForInstanceRunning, tagInstance, listAllInstances,
+  ALL_AWS_REGIONS, AWS_REGION_META,
 };
