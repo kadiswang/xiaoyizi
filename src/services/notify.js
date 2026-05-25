@@ -32,6 +32,28 @@ async function send(text) {
   } catch (e) { logger.error({ err: e }, 'TG send error'); }
 }
 
+async function sendToUser(telegramId, text) {
+  // 直接发给指定 TG 用户（使用环境变量 TG_BOT_TOKEN 或数据库配置）
+  const token = process.env.TG_BOT_TOKEN || db.getSetting('tg_bot_token');
+  if (!token || !telegramId) return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: telegramId, text, parse_mode: 'HTML' })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      logger.warn({ telegramId, desc: data.description }, 'TG sendToUser failed');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    logger.warn({ err: e.message, telegramId }, 'TG sendToUser error');
+    return false;
+  }
+}
+
 // 通知类型
 const notify = {
   nodeDown(nodeName) {
@@ -80,7 +102,13 @@ const notify = {
   ops(msg) {
     if (db.getSetting('tg_on_ops') !== 'true') return Promise.resolve();
     return send(msg).catch(() => {});
+  },
+  // 给指定用户发流量预警（不走 ops 通道，发到用户私聊）
+  async userTrafficAlert(user, usedGb) {
+    if (!user || !user.telegram_id) return false;
+    const text = `⚠️ <b>流量预警</b>\n\n您今日已用 <b>${usedGb.toFixed(2)} GB</b>，已超出预警阈值。\n\n如非本人使用，请尽快重置订阅。\n本人使用请忽略。`;
+    return await sendToUser(user.telegram_id, text);
   }
 };
 
-module.exports = { send, notify };
+module.exports = { send, sendToUser, notify };

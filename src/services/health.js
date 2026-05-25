@@ -521,9 +521,41 @@ function saveTrafficRecords(nodeId, records, routeCtx = null) {
       if (!userId || checkedUsers.has(userId)) continue;
       checkedUsers.add(userId);
       checkUserTrafficLimit(userId);
+      checkUserDailyTrafficAlert(userId);
     }
   }
   return count;
+}
+
+// 用户单日流量预警（独立于硬限额，给已绑定 TG 的用户私信提醒）
+const _trafficAlertNotified = new Map(); // userId → 上次通知日期 (YYYY-MM-DD)
+
+function checkUserDailyTrafficAlert(userId) {
+  if (db.getSetting('traffic_alert_enabled') !== 'true') return;
+  const user = db.getUserById(userId);
+  if (!user || !user.telegram_id) return;
+  if (user.is_blocked || user.is_frozen) return;
+
+  const thresholdGb = parseFloat(db.getSetting('traffic_alert_threshold_gb'));
+  if (!Number.isFinite(thresholdGb) || thresholdGb <= 0) return;
+
+  // 今日已用流量（基于 traffic_daily 表）
+  const today = require('../utils/time').dateKeyInTimeZone(new Date(), 'Asia/Shanghai');
+  const row = db.getDb().prepare(
+    'SELECT COALESCE(SUM(uplink+downlink), 0) AS bytes FROM traffic_daily WHERE user_id = ? AND date = ?'
+  ).get(userId, today);
+  const todayGb = (row?.bytes || 0) / 1073741824;
+  if (todayGb < thresholdGb) return;
+
+  // 同一用户每日最多通知一次
+  if (_trafficAlertNotified.get(userId) === today) return;
+  _trafficAlertNotified.set(userId, today);
+
+  notify.userTrafficAlert(user, todayGb).then(ok => {
+    if (ok) {
+      db.addAuditLog(userId, 'traffic_alert_notify', `今日流量预警 ${todayGb.toFixed(2)} GB（阈值 ${thresholdGb} GB）`, 'system');
+    }
+  }).catch(() => {});
 }
 
 // 用户总流量限额检查

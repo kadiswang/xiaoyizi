@@ -682,6 +682,31 @@
       </div>
     </div>
 
+    <!-- 用户流量预警（发到用户 TG 私聊） -->
+    <div class="mb-4">
+      <h4 class="text-gray-400 text-xs font-medium mb-2 uppercase tracking-wider">用户流量预警</h4>
+      <div class="space-y-3">
+        <label class="flex items-center justify-between p-3 rounded-xl bg-black/20 cursor-pointer hover:bg-white/5 transition">
+          <div>
+            <span class="text-white text-sm">单日流量预警</span>
+            <p class="text-gray-600 text-[11px] mt-0.5">已绑定 TG 的用户当日流量超过阈值时，由机器人私聊提醒用户检查订阅是否泄露。同一用户每日仅提醒一次。</p>
+          </div>
+          <div class="relative">
+            <input type="checkbox" id="traffic-alert-enabled" class="sr-only peer">
+            <div class="w-9 h-5 bg-gray-600 rounded-full peer-checked:bg-rose-500 transition-colors"></div>
+            <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+          </div>
+        </label>
+        <div id="traffic-alert-options">
+          <label class="text-gray-500 text-xs block mb-1">阈值 (GB/天)</label>
+          <div class="flex items-center gap-2">
+            <input type="number" id="traffic-alert-threshold-gb" min="1" max="10000" value="100" class="w-32 bg-black/30 text-white px-3 py-2 rounded-xl border border-white/10 text-sm">
+            <span class="text-gray-500 text-sm">GB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TG 未签到自动冻结 -->
     <div class="mb-4">
       <h4 class="text-gray-400 text-xs font-medium mb-2 uppercase tracking-wider">TG 未签到策略</h4>
@@ -1208,10 +1233,15 @@
     const noCheckinEnabled = document.getElementById('auto-freeze-no-checkin-enabled')?.checked;
     const noCheckinOpts = document.getElementById('no-checkin-freeze-options');
     if (noCheckinOpts) noCheckinOpts.style.opacity = noCheckinEnabled ? '1' : '0.4';
+
+    const alertEnabled = document.getElementById('traffic-alert-enabled')?.checked;
+    const alertOpts = document.getElementById('traffic-alert-options');
+    if (alertOpts) alertOpts.style.opacity = alertEnabled ? '1' : '0.4';
   }
 
   document.getElementById('auto-freeze-traffic-enabled')?.addEventListener('change', updateFreezeOptionsVisibility);
   document.getElementById('auto-freeze-no-checkin-enabled')?.addEventListener('change', updateFreezeOptionsVisibility);
+  document.getElementById('traffic-alert-enabled')?.addEventListener('change', updateFreezeOptionsVisibility);
 
   async function loadAutomationConfig() {
     try {
@@ -1236,6 +1266,12 @@
       const daysEl = document.getElementById('auto-freeze-no-checkin-days');
       if (daysEl && cfg.auto_freeze_no_checkin_days) daysEl.value = cfg.auto_freeze_no_checkin_days;
 
+      // 用户流量预警
+      const alertToggle = document.getElementById('traffic-alert-enabled');
+      if (alertToggle) alertToggle.checked = cfg.traffic_alert_enabled === 'true';
+      const alertGbEl = document.getElementById('traffic-alert-threshold-gb');
+      if (alertGbEl && cfg.traffic_alert_threshold_gb) alertGbEl.value = cfg.traffic_alert_threshold_gb;
+
       updateFreezeOptionsVisibility();
     } catch (e) { console.error('加载自动化配置失败', e); }
   }
@@ -1251,6 +1287,8 @@
         auto_freeze_traffic_enabled: document.getElementById('auto-freeze-traffic-enabled')?.checked ? 'true' : 'false',
         auto_freeze_no_checkin_enabled: document.getElementById('auto-freeze-no-checkin-enabled')?.checked ? 'true' : 'false',
         auto_freeze_no_checkin_days: document.getElementById('auto-freeze-no-checkin-days')?.value || '30',
+        traffic_alert_enabled: document.getElementById('traffic-alert-enabled')?.checked ? 'true' : 'false',
+        traffic_alert_threshold_gb: document.getElementById('traffic-alert-threshold-gb')?.value || '100',
       };
       const res = await fetch('/admin/api/automation-config', {
         method: 'POST', credentials: 'same-origin',

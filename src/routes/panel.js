@@ -12,6 +12,7 @@ const {
   canUserAccessNode,
 } = require('../utils/routeHelpers');
 const { getGroup, getGroupLabel, getGroupResetConfig } = require('../utils/userGroup');
+const { getOnlineCache } = require('../services/health');
 
 const router = express.Router();
 
@@ -107,6 +108,15 @@ router.get('/', requireAuth, (req, res) => {
     return { ...n, link };
   });
 
+  // 每个节点当前在线人数（来自 health 模块的内存缓存）
+  const nodeOnlineCount = new Map();
+  try {
+    const onlineCache = getOnlineCache();
+    for (const r of (onlineCache.full?.nodes || [])) {
+      nodeOnlineCount.set(r.nodeId, r.count || 0);
+    }
+  } catch (_) { /* 忽略 */ }
+
   const nodeAiTags = {};
   try {
     const d = db.getDb();
@@ -141,6 +151,7 @@ router.get('/', requireAuth, (req, res) => {
     user, userNodes, traffic, globalTraffic, formatBytes,
     trafficLimit: user.traffic_limit,
     nodeAiTags,
+    nodeOnlineCount,
     subUrl: buildSubUrl(req, user.sub_token, 'sub'),
     subUrl6: buildSubUrl(req, user.sub_token, 'sub6'),
     subHy2Url: buildSubUrl(req, user.sub_token, 'subhy2'),

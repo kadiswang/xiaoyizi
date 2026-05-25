@@ -575,6 +575,7 @@ router.get('/automation-config', (req, res) => {
     'traffic_exceed_action', 'traffic_exceed_threshold_gb', 'traffic_exceed_hard_limit_gb',
     'auto_freeze_no_checkin_enabled', 'auto_freeze_no_checkin_days',
     'auto_freeze_traffic_enabled',
+    'traffic_alert_enabled', 'traffic_alert_threshold_gb',
   ];
   const cfg = {};
   for (const k of keys) cfg[k] = db.getSetting(k) || '';
@@ -600,6 +601,8 @@ router.post('/automation-config', (req, res) => {
       auto_freeze_no_checkin_enabled: v => v === 'true' || v === 'false' ? v : null,
       auto_freeze_no_checkin_days: v => { const n = parseInt(v, 10); return n >= 1 && n <= 365 ? String(n) : null; },
       auto_freeze_traffic_enabled: v => v === 'true' || v === 'false' ? v : null,
+      traffic_alert_enabled: v => v === 'true' || v === 'false' ? v : null,
+      traffic_alert_threshold_gb: v => { const n = parseFloat(v); return n >= 1 && n <= 10000 ? String(n) : null; },
     };
     for (const [k, v] of Object.entries(req.body)) {
       const validate = validators[k];
