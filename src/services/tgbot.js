@@ -394,11 +394,17 @@ function handleSub(msg) {
   const { appendSignature } = require('../utils/subSignature');
   const base = getPanelUrl();
   const vlessUrl = appendSignature(`${base}/sub/${token}`, token, 'sub');
+  const sub6Url = appendSignature(`${base}/sub6/${token}`, token, 'sub6');
   const hy2Url = appendSignature(`${base}/subhy2/${token}`, token, 'subhy2');
   const allUrl = appendSignature(`${base}/suball/${token}`, token, 'suball');
+
+  // 仅当后台开启 IPv6 订阅可见时，才显示 IPv6 链接
+  const showIpv6 = db.getSetting('sub_visible_ss') !== 'false';
+  const ipv6Section = showIpv6 ? `\n\n🌐 IPv6: <code>${sub6Url}</code>` : '';
+
   return bot.sendMessage(
     msg.chat.id,
-    `🔗 <b>订阅链接</b>\n\n🎯 组合: <code>${allUrl}</code>\n\n🌐 VLESS: <code>${vlessUrl}</code>\n\n⚡ Hysteria2: <code>${hy2Url}</code>\n\n⚠️ 请勿泄露，客户端会自动识别格式`,
+    `🔗 <b>订阅链接</b>\n\n🎯 组合: <code>${allUrl}</code>\n\n🌐 VLESS: <code>${vlessUrl}</code>${ipv6Section}\n\n⚡ Hysteria2: <code>${hy2Url}</code>\n\n⚠️ 请勿泄露，客户端会自动识别格式`,
     chatOptions(msg, { parse_mode: 'HTML' })
   );
 }

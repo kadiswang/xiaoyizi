@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const dns = require('dns').promises;
 const { randomPort } = require('../utils/vless');
 const { BEAUTIFUL_NAMES } = require('../utils/names');
 const { getRegionEmoji, getCityCN } = require('../utils/regions');
@@ -13,20 +14,109 @@ function getRegionEmojiFromGeo(city, country) {
   return getRegionEmoji(`${city || ''} ${country || ''}`);
 }
 
-async function detectRegion(ip) {
+// AWS 区域代码 → 城市/国家
+const AWS_REGION_TO_GEO = {
+  'us-east-1':      { city: 'Ashburn',       country: 'United States' },
+  'us-east-2':      { city: 'Columbus',      country: 'United States' },
+  'us-west-1':      { city: 'San Jose',      country: 'United States' },
+  'us-west-2':      { city: 'Portland',      country: 'United States' },
+  'ca-central-1':   { city: 'Toronto',       country: 'Canada' },
+  'ca-west-1':      { city: 'Calgary',       country: 'Canada' },
+  'mx-central-1':   { city: 'Mexico City',   country: 'Mexico' },
+  'sa-east-1':      { city: 'São Paulo',     country: 'Brazil' },
+  'eu-west-1':      { city: 'Dublin',        country: 'Ireland' },
+  'eu-west-2':      { city: 'London',        country: 'United Kingdom' },
+  'eu-west-3':      { city: 'Paris',         country: 'France' },
+  'eu-central-1':   { city: 'Frankfurt',     country: 'Germany' },
+  'eu-central-2':   { city: 'Zurich',        country: 'Switzerland' },
+  'eu-north-1':     { city: 'Stockholm',     country: 'Sweden' },
+  'eu-south-1':     { city: 'Milan',         country: 'Italy' },
+  'eu-south-2':     { city: 'Spain',         country: 'Spain' },
+  'ap-east-1':      { city: 'Hong Kong',     country: 'Hong Kong' },
+  'ap-east-2':      { city: 'Taipei',        country: 'Taiwan' },
+  'ap-northeast-1': { city: 'Tokyo',         country: 'Japan' },
+  'ap-northeast-2': { city: 'Seoul',         country: 'Korea' },
+  'ap-northeast-3': { city: 'Osaka',         country: 'Japan' },
+  'ap-southeast-1': { city: 'Singapore',     country: 'Singapore' },
+  'ap-southeast-2': { city: 'Sydney',        country: 'Australia' },
+  'ap-southeast-3': { city: 'Jakarta',       country: 'Indonesia' },
+  'ap-southeast-4': { city: 'Melbourne',     country: 'Australia' },
+  'ap-southeast-5': { city: 'Kuala Lumpur',  country: 'Malaysia' },
+  'ap-southeast-7': { city: 'Bangkok',       country: 'Thailand' },
+  'ap-south-1':     { city: 'Mumbai',        country: 'India' },
+  'ap-south-2':     { city: 'Hyderabad',     country: 'India' },
+  'me-south-1':     { city: 'Bahrain',       country: 'Bahrain' },
+  'me-central-1':   { city: 'Dubai',         country: 'United Arab Emirates' },
+  'il-central-1':   { city: 'Tel Aviv',      country: 'Israel' },
+  'af-south-1':     { city: 'Cape Town',     country: 'South Africa' },
+};
+
+// 通过 AWS EC2 反向 DNS 推断区域，例如：
+// ec2-43-216-223-117.ap-southeast-5.compute.amazonaws.com → ap-southeast-5
+async function detectRegionByAwsPtr(ip) {
   try {
-    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city&lang=en`);
-    const data = await res.json();
-    if (data.status === 'success') {
-      return {
-        city: data.city, region: data.regionName, country: data.country,
-        cityCN: getCityCN(data.city),
-        emoji: getRegionEmojiFromGeo(data.city, data.country)
-      };
+    const hostnames = await Promise.race([
+      dns.reverse(ip),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('PTR timeout')), 3000)),
+    ]);
+    for (const h of hostnames) {
+      const m = h.match(/\.([a-z]{2}-[a-z]+-\d)\.compute\.amazonaws\.com$/);
+      if (m && AWS_REGION_TO_GEO[m[1]]) {
+        const geo = AWS_REGION_TO_GEO[m[1]];
+        return {
+          city: geo.city, region: geo.city, country: geo.country,
+          cityCN: getCityCN(geo.city),
+          emoji: getRegionEmojiFromGeo(geo.city, geo.country),
+        };
+      }
     }
+  } catch (_) { /* 没有 PTR 或不是 AWS */ }
+  return null;
+}
+
+async function detectRegion(ip) {
+  // 优先：AWS PTR 识别（无外网依赖、最准、最快）
+  const awsGeo = await detectRegionByAwsPtr(ip);
+  if (awsGeo) return awsGeo;
+
+  // 回退：ip-api.com（免费版，加超时避免拖慢部署）
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city&lang=en`, { signal: ctrl.signal });
+      const data = await res.json();
+      if (data.status === 'success') {
+        return {
+          city: data.city, region: data.regionName, country: data.country,
+          cityCN: getCityCN(data.city),
+          emoji: getRegionEmojiFromGeo(data.city, data.country)
+        };
+      }
+    } finally { clearTimeout(timer); }
   } catch (e) {
-    logger.warn({ err: e, ip }, '地区检测失败');
+    logger.warn({ err: e.message, ip }, '地区检测 ip-api 失败，尝试 ipinfo');
   }
+
+  // 二次回退：ipinfo.io（HTTPS，独立 IP，规避 ip-api 的 IP 被屏蔽问题）
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const res = await fetch(`https://ipinfo.io/${ip}/json`, { signal: ctrl.signal });
+      const data = await res.json();
+      if (data && data.city) {
+        return {
+          city: data.city, region: data.region || '', country: data.country || '',
+          cityCN: getCityCN(data.city),
+          emoji: getRegionEmojiFromGeo(data.city, data.country),
+        };
+      }
+    } finally { clearTimeout(timer); }
+  } catch (e) {
+    logger.warn({ err: e.message, ip }, '地区检测 ipinfo 失败');
+  }
+
   return { city: 'Unknown', region: '', country: '', cityCN: '未知', emoji: '🌐' };
 }
 
