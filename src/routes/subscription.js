@@ -313,8 +313,8 @@ router.get('/sub6/:token', subLimiter, handleSubscription({
   auditLabel: 'IPv6订阅拉取',
   panelSuffix: '-IPv6',
   generators: {
-    clash: (nodes) => generateClashSsSub(nodes),
-    singbox: (nodes) => generateSingboxSsSub(nodes),
+    clash: (nodes, info) => generateClashSsSub(nodes, info),
+    singbox: (nodes, info) => generateSingboxSsSub(nodes, info),
     default: (nodes, info) => generateV2raySsSub(nodes, info),
   }
 }));

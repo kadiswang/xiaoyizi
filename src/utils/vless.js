@@ -19,7 +19,7 @@ function buildVlessLink(node, uuid) {
 
 // 生成信息假节点 vless 链接
 function buildInfoLink(text) {
-  return `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=tcp&security=none#${encodeURIComponent(text)}`;
+  return `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:10000?type=tcp&security=none#${encodeURIComponent(text)}`;
 }
 
 // 生成流量信息链接（公共逻辑，避免各协议订阅重复构建）
@@ -176,7 +176,7 @@ function buildHy2Link(node, userPassword) {
 }
 
 function buildHy2InfoLink(text) {
-  return `hysteria2://00000000@127.0.0.1:0?insecure=1#${encodeURIComponent(text)}`;
+  return `hysteria2://00000000@127.0.0.1:10000?insecure=1#${encodeURIComponent(text)}`;
 }
 
 function generateV2rayHy2Sub(nodes, trafficInfo) {
@@ -240,7 +240,8 @@ function buildSsLink(node, userPassword) {
 
 function buildSsInfoLink(text) {
   const userinfo = Buffer.from('aes-256-gcm:00000000').toString('base64');
-  return `ss://${userinfo}@127.0.0.1:0#${encodeURIComponent(text)}`;
+  // 用 10000 而非 0，避免某些客户端（如 v2rayN）将 port=0 视为无效节点过滤
+  return `ss://${userinfo}@127.0.0.1:10000#${encodeURIComponent(text)}`;
 }
 
 function generateV2raySsSub(nodes, trafficInfo) {
@@ -249,25 +250,39 @@ function generateV2raySsSub(nodes, trafficInfo) {
   return Buffer.from(links).toString('base64');
 }
 
-function generateClashSsSub(nodes) {
-  const proxies = nodes.map(n => ({
+function generateClashSsSub(nodes, trafficInfo) {
+  // 生成流量信息伪装节点（无效占位地址，不会真正连接）
+  const infoProxies = trafficInfo ? buildTrafficInfoLinks(trafficInfo, (text) => ({
+    name: text, type: 'ss',
+    server: '127.0.0.1', port: 10000,
+    cipher: 'aes-256-gcm', password: '00000000',
+    udp: false
+  }), '[IPv6]') : [];
+  const realProxies = nodes.map(n => ({
     name: n.name, type: 'ss',
     server: n.host, port: n.port,
     cipher: n.ss_method || 'aes-256-gcm',
     password: n.userPassword || n.ss_password || '',
     udp: true
   }));
-  return clashConfigToYaml(wrapClashConfig(proxies, nodes.map(n => n.name)));
+  const proxies = [...infoProxies, ...realProxies];
+  return clashConfigToYaml(wrapClashConfig(proxies, proxies.map(p => p.name)));
 }
 
-function generateSingboxSsSub(nodes) {
-  const outbounds = nodes.map(n => ({
+function generateSingboxSsSub(nodes, trafficInfo) {
+  const infoOutbounds = trafficInfo ? buildTrafficInfoLinks(trafficInfo, (text) => ({
+    tag: text, type: 'shadowsocks',
+    server: '127.0.0.1', server_port: 10000,
+    method: 'aes-256-gcm', password: '00000000'
+  }), '[IPv6]') : [];
+  const realOutbounds = nodes.map(n => ({
     tag: n.name, type: 'shadowsocks',
     server: n.host, server_port: n.port,
     method: n.ss_method || 'aes-256-gcm',
     password: n.userPassword || n.ss_password || ''
   }));
-  return JSON.stringify(wrapSingboxConfig(outbounds, nodes.map(n => n.name)), null, 2);
+  const outbounds = [...infoOutbounds, ...realOutbounds];
+  return JSON.stringify(wrapSingboxConfig(outbounds, outbounds.map(o => o.tag)), null, 2);
 }
 
 function detectClient(ua) {
