@@ -1,18 +1,9 @@
 const express = require('express');
 const db = require('../services/database');
 const { gameRpsLimiter } = require('../middleware/rateLimit');
-const { verifyTgInitData, today, TG_INITDATA_MAX_AGE_SEC } = require('../utils/tgGame');
+const { verifyTgInitData, today, TG_INITDATA_MAX_AGE_SEC, tryUnfreezeAfterTraffic } = require('../utils/tgGame');
 
 const router = express.Router();
-
-function tryUnfreezeAfterTraffic(userId) {
-  const user = db.getUserById(userId);
-  if (user && user.is_frozen && user.freeze_reason === 'traffic_limit' && !db.isTrafficExceeded(userId)) {
-    db.unfreezeUser(userId);
-    db.addAuditLog(null, 'traffic_limit_unfreeze', `签到/游戏增加流量后自动解冻: ${user.username}`, 'system');
-    try { require('../services/configEvents').emitSyncAll(); } catch (_) {}
-  }
-}
 
 const WIN_RATE = 0.50;
 const DRAW_RATE = 0.15;
@@ -134,7 +125,7 @@ router.post('/api/rps-play', express.json(), (req, res, next) => {
   const day = today();
   const outcome = resolveOutcome(choice);
   const result = applyRpsPlay(user.id, day, outcome);
-  if (result.ok && outcome.gb > 0) tryUnfreezeAfterTraffic(user.id);
+  if (result.ok && outcome.gb > 0) tryUnfreezeAfterTraffic(db, user.id);
   if (!result.ok) {
     const profile = getRpsProfileByUser(user);
     return res.json({

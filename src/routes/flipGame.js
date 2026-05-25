@@ -1,18 +1,9 @@
 const express = require('express');
 const db = require('../services/database');
 const { gameFlipLimiter } = require('../middleware/rateLimit');
-const { verifyTgInitData, today, weightedRandom, TG_INITDATA_MAX_AGE_SEC } = require('../utils/tgGame');
+const { verifyTgInitData, today, weightedRandom, getUserByTelegramId, tryUnfreezeAfterTraffic } = require('../utils/tgGame');
 
 const router = express.Router();
-
-function tryUnfreezeAfterTraffic(userId) {
-  const user = db.getUserById(userId);
-  if (user && user.is_frozen && user.freeze_reason === 'traffic_limit' && !db.isTrafficExceeded(userId)) {
-    db.unfreezeUser(userId);
-    db.addAuditLog(null, 'traffic_limit_unfreeze', `签到/游戏增加流量后自动解冻: ${user.username}`, 'system');
-    try { require('../services/configEvents').emitSyncAll(); } catch (_) {}
-  }
-}
 
 const DAILY_FLIP_LIMIT = 3;
 const CARD_COUNT = 9;
@@ -24,10 +15,6 @@ const FLIP_PRIZES = [
   { label: '🙂 谢谢参与', gb: 0, weight: 20 },
   { label: '😵 小失手 -0.5GB', gb: -0.5, weight: 12 },
 ];
-
-function getUserByTelegramId(telegramId) {
-  return db.getDb().prepare('SELECT * FROM users WHERE telegram_id = ?').get(String(telegramId));
-}
 
 function createSeededRandom(seedText) {
   let seed = 0;
@@ -151,7 +138,7 @@ router.post('/api/flip-profile', express.json(), (req, res) => {
   const tgUser = verifyTgInitData(req.body?.initData || '');
   if (!tgUser) return res.json({ ok: false, error: '验证失败' });
 
-  const user = getUserByTelegramId(tgUser.id);
+  const user = getUserByTelegramId(db, tgUser.id);
   if (!user) return res.json({ ok: false, error: '未绑定账号' });
 
   res.json({ ok: true, ...getFlipProfileByUser(user) });
@@ -171,12 +158,12 @@ router.post('/api/flip-draw', express.json(), (req, res, next) => {
     return res.json({ ok: false, error: '无效卡片' });
   }
 
-  const user = getUserByTelegramId(tgUser.id);
+  const user = getUserByTelegramId(db, tgUser.id);
   if (!user) return res.json({ ok: false, error: '未绑定账号' });
 
   const prize = weightedRandom(FLIP_PRIZES);
   const result = applyFlipDraw(user, cardIndex, prize);
-  if (result.ok && prize.gb > 0) tryUnfreezeAfterTraffic(user.id);
+  if (result.ok && prize.gb > 0) tryUnfreezeAfterTraffic(db, user.id);
   const profile = getFlipProfileByUser(user);
   if (!result.ok) {
     return res.json({ ...result, ...profile });

@@ -5,15 +5,6 @@ const { getClientIp } = require('../utils/clientIp');
 const logger = require('../services/logger');
 
 
-// 登录限流：每 IP 15 分钟最多 10 次
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: '登录请求过于频繁，请 15 分钟后再试' },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
 // 订阅单 token 限流配置
 
 const SUB_IP_WINDOW_MS = toPosInt(process.env.SUB_IP_WINDOW_MS, 60 * 1000, 1000, 60 * 60 * 1000);
@@ -104,7 +95,6 @@ const gameFlipLimiter = buildGameLimiter(GAME_FLIP_WINDOW_MS, GAME_FLIP_MAX_REQ)
 const gameLuckyLimiter = buildGameLimiter(GAME_LUCKY_WINDOW_MS, GAME_LUCKY_MAX_REQ);
 
 module.exports = {
-  authLimiter,
   subLimiter,
   adminLimiter,
   agentDownloadLimiter,

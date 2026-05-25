@@ -137,29 +137,22 @@ function applySubGuards(token, ua, clientIP) {
   return result;
 }
 
-router.get('/sub-qr', requireAuth, async (req, res) => {
-  try {
-    const subUrl = buildSubUrl(req, req.user.sub_token, 'sub');
-    const png = await QRCode.toBuffer(subUrl, { width: 300, margin: 1, errorCorrectionLevel: 'M' });
-    res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
-    res.send(png);
-  } catch (e) {
-    logger.error('[二维码] 生成失败:', e.message);
-    res.status(500).send('二维码生成失败');
-  }
-});
+router.get('/sub-qr', requireAuth, makeQrHandler('sub'));
+router.get('/sub6-qr', requireAuth, makeQrHandler('sub6'));
 
-router.get('/sub6-qr', requireAuth, async (req, res) => {
-  try {
-    const subUrl6 = buildSubUrl(req, req.user.sub_token, 'sub6');
-    const png = await QRCode.toBuffer(subUrl6, { width: 300, margin: 1, errorCorrectionLevel: 'M' });
-    res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
-    res.send(png);
-  } catch (e) {
-    logger.error('[二维码] IPv6生成失败:', e.message);
-    res.status(500).send('二维码生成失败');
-  }
-});
+function makeQrHandler(route) {
+  return async (req, res) => {
+    try {
+      const subUrl = buildSubUrl(req, req.user.sub_token, route);
+      const png = await QRCode.toBuffer(subUrl, { width: 300, margin: 1, errorCorrectionLevel: 'M' });
+      res.set({ 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
+      res.send(png);
+    } catch (e) {
+      logger.error(`[二维码] ${route} 生成失败:`, e.message);
+      res.status(500).send('二维码生成失败');
+    }
+  };
+}
 
 function handleSubscription(cfg) {
   return (req, res) => {

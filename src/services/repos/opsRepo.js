@@ -20,10 +20,6 @@ function getDiagnosis(id) {
   return _getDb().prepare('SELECT d.*, n.name as node_name, n.host FROM ops_diagnosis d JOIN nodes n ON d.node_id = n.id WHERE d.id = ?').get(id);
 }
 
-function clearDiagnoses() {
-  _getDb().prepare('DELETE FROM ops_diagnosis').run();
-}
-
 function getAllDiagnoses(limit = 20) {
   return _getDb().prepare('SELECT d.*, n.name as node_name, n.host FROM ops_diagnosis d JOIN nodes n ON d.node_id = n.id ORDER BY d.created_at DESC LIMIT ?').all(limit);
 }
@@ -110,7 +106,7 @@ function getUserMultiNodeObserveEvents(hours = 24, limit = 20, offset = 0) {
 
 module.exports = {
   init,
-  addDiagnosis, updateDiagnosis, getDiagnosis, getAllDiagnoses, clearDiagnoses,
+  addDiagnosis, updateDiagnosis, getDiagnosis, getAllDiagnoses,
   addDiaryEntry, getDiaryEntries, getDiaryStats,
   addUserMultiNodeObserveEvent, getUserMultiNodeObserveOverview, getUserMultiNodeObserveEvents,
 };

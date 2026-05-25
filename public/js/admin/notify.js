@@ -23,13 +23,6 @@ async function saveAnnouncement() {
   showToast(text ? '✅ 公告已更新' : '✅ 公告已清除');
 }
 
-async function saveMaxUsers() {
-  const max = parseInt(document.getElementById('max-users-input').value) || 0;
-  const res = await fetch('/admin/api/max-users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window._csrf || '' }, body: JSON.stringify({ max }) });
-  if (res.ok) showToast(max > 0 ? '✅ 注册上限已设为 ' + max + ' 人' : '✅ 已取消注册限制');
-  else showToast('❌ 保存失败');
-}
-
 async function saveSmtpConfig() {
   const body = {
     enabled: !!document.getElementById('smtp-enabled')?.checked,

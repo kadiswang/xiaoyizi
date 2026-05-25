@@ -54,38 +54,6 @@ function getUserTraffic(userId) {
   `).get(userId);
 }
 
-function getAllUsersTraffic(date, limit = 20, offset = 0) {
-  const where = date ? 'AND t.date = ?' : '';
-  const params = date ? [date, limit, offset] : [limit, offset];
-  const rows = _getDb().prepare(`
-    SELECT u.id, u.username, u.name, u.avatar_url,
-      COALESCE(SUM(t.uplink), 0) as total_up,
-      COALESCE(SUM(t.downlink), 0) as total_down
-    FROM users u
-    LEFT JOIN traffic_daily t ON u.id = t.user_id ${where}
-    GROUP BY u.id
-    HAVING total_up + total_down > 0
-    ORDER BY (total_up + total_down) DESC
-    LIMIT ? OFFSET ?
-  `).all(...params);
-  const countParams = date ? [date] : [];
-  const total = _getDb().prepare(`
-    SELECT COUNT(*) as c FROM (
-      SELECT u.id FROM users u
-      LEFT JOIN traffic_daily t ON u.id = t.user_id ${where}
-      GROUP BY u.id HAVING COALESCE(SUM(t.uplink),0) + COALESCE(SUM(t.downlink),0) > 0
-    )
-  `).get(...countParams).c;
-  return { rows, total };
-}
-
-function getNodeTraffic(nodeId) {
-  return _getDb().prepare(`
-    SELECT COALESCE(SUM(uplink), 0) as total_up, COALESCE(SUM(downlink), 0) as total_down
-    FROM traffic_daily WHERE node_id = ?
-  `).get(nodeId);
-}
-
 function getHostTraffic(sshHost) {
   return _getDb().prepare(`
     SELECT COALESCE(SUM(td.uplink), 0) as total_up, COALESCE(SUM(td.downlink), 0) as total_down
@@ -241,7 +209,7 @@ function cleanupTrafficHistory(rawRetentionDays = 30, dailyRetentionDays = 120) 
 
 module.exports = {
   init,
-  recordTraffic, getUserTraffic, getAllUsersTraffic, getNodeTraffic, getHostTraffic,
+  recordTraffic, getUserTraffic, getHostTraffic,
   getGlobalTraffic, getTodayTraffic, getUsersTrafficByRange, getNodesTrafficByRange,
   getTrafficTrend, getUserTrafficDaily, getUserTrafficDailyAgg, cleanupTrafficHistory
 };

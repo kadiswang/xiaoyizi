@@ -38,14 +38,6 @@ function isInWhitelist(userId) {
   return !!_getDb().prepare('SELECT 1 FROM whitelist WHERE user_id = ?').get(userId);
 }
 
-function getWhitelist() {
-  return _getDb().prepare(`
-    SELECT w.*, u.username, u.name FROM whitelist w
-    LEFT JOIN users u ON w.user_id = u.id
-    ORDER BY w.added_at DESC
-  `).all();
-}
-
 function getWhitelistPaged(limit = 20, offset = 0, search = '') {
   const l = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
   const o = Math.max(0, parseInt(offset, 10) || 0);
@@ -86,10 +78,6 @@ function isInRegisterWhitelist(username) {
   return !!_getDb().prepare('SELECT 1 FROM register_whitelist WHERE username = ?').get(username);
 }
 
-function getRegisterWhitelist() {
-  return _getDb().prepare('SELECT * FROM register_whitelist ORDER BY added_at DESC').all();
-}
-
 function getRegisterWhitelistPaged(limit = 20, offset = 0, search = '') {
   const l = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
   const o = Math.max(0, parseInt(offset, 10) || 0);
@@ -119,16 +107,6 @@ function removeFromRegisterWhitelist(username) {
 }
 
 // 节点定向白名单
-function getNodeAccessWhitelist() {
-  return _getDb().prepare(`
-    SELECT naw.*, u.username, n.name AS node_name, n.host AS node_host, n.port AS node_port
-    FROM node_access_whitelist naw
-    JOIN users u ON naw.user_id = u.id
-    JOIN nodes n ON naw.node_id = n.id
-    ORDER BY naw.created_at DESC, naw.id DESC
-  `).all();
-}
-
 function getNodeAccessWhitelistPaged(limit = 20, offset = 0, search = '') {
   const l = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
   const o = Math.max(0, parseInt(offset, 10) || 0);
@@ -186,7 +164,7 @@ module.exports = {
   init,
   addAuditLog, getAuditLogs, clearAuditLogs,
   getSetting, setSetting,
-  isInWhitelist, getWhitelist, getWhitelistPaged, addToWhitelist, removeFromWhitelist,
-  isInRegisterWhitelist, getRegisterWhitelist, getRegisterWhitelistPaged, addToRegisterWhitelist, removeFromRegisterWhitelist,
-  getNodeAccessWhitelist, getNodeAccessWhitelistPaged, getNodeAccessWhitelistNodeIdsForUser, addNodeAccessWhitelist, removeNodeAccessWhitelist
+  isInWhitelist, getWhitelistPaged, addToWhitelist, removeFromWhitelist,
+  isInRegisterWhitelist, getRegisterWhitelistPaged, addToRegisterWhitelist, removeFromRegisterWhitelist,
+  getNodeAccessWhitelistPaged, getNodeAccessWhitelistNodeIdsForUser, addNodeAccessWhitelist, removeNodeAccessWhitelist
 };

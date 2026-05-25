@@ -1,18 +1,9 @@
 const express = require('express');
 const db = require('../services/database');
 const { gameLuckyLimiter } = require('../middleware/rateLimit');
-const { verifyTgInitData, weightedRandom, weekKey, shiftIsoDate, TG_INITDATA_MAX_AGE_SEC } = require('../utils/tgGame');
+const { verifyTgInitData, weightedRandom, weekKey, shiftIsoDate, TG_INITDATA_MAX_AGE_SEC, getUserByTelegramId, tryUnfreezeAfterTraffic } = require('../utils/tgGame');
 
 const router = express.Router();
-
-function tryUnfreezeAfterTraffic(userId) {
-  const user = db.getUserById(userId);
-  if (user && user.is_frozen && user.freeze_reason === 'traffic_limit' && !db.isTrafficExceeded(userId)) {
-    db.unfreezeUser(userId);
-    db.addAuditLog(null, 'traffic_limit_unfreeze', `签到/游戏增加流量后自动解冻: ${user.username}`, 'system');
-    try { require('../services/configEvents').emitSyncAll(); } catch (_) {}
-  }
-}
 
 const LUCKY_WHEEL_PRIZES = [
   { label: '👑 头奖 88GB', gb: 88, weight: 1, tone: 'jackpot' },
@@ -24,10 +15,6 @@ const LUCKY_WHEEL_PRIZES = [
   { label: '📶 保底 10GB', gb: 10, weight: 18, tone: 'base' },
   { label: '🙂 幸运 10GB', gb: 10, weight: 13, tone: 'base' },
 ];
-
-function getUserByTelegramId(telegramId) {
-  return db.getDb().prepare('SELECT * FROM users WHERE telegram_id = ?').get(String(telegramId));
-}
 
 function getNextLuckyOpenLabel(date = new Date()) {
   const nextMonday = shiftIsoDate(weekKey(date), 7);
@@ -103,7 +90,7 @@ router.post('/api/lucky-profile', express.json(), (req, res) => {
   const tgUser = verifyTgInitData(req.body?.initData || '');
   if (!tgUser) return res.json({ ok: false, error: '验证失败' });
 
-  const user = getUserByTelegramId(tgUser.id);
+  const user = getUserByTelegramId(db, tgUser.id);
   if (!user) return res.json({ ok: false, error: '未绑定账号' });
 
   return res.json({ ok: true, ...getLuckyProfileByUser(user) });
@@ -118,12 +105,12 @@ router.post('/api/lucky-spin', express.json(), (req, res, next) => {
   const tgUser = req.tgUser || null;
   if (!tgUser) return res.json({ ok: false, error: '验证失败' });
 
-  const user = getUserByTelegramId(tgUser.id);
+  const user = getUserByTelegramId(db, tgUser.id);
   if (!user) return res.json({ ok: false, error: '未绑定账号' });
 
   const prize = weightedRandom(LUCKY_WHEEL_PRIZES);
   const result = applyLuckySpin(user.id, weekKey(), prize);
-  if (result.ok) tryUnfreezeAfterTraffic(user.id);
+  if (result.ok) tryUnfreezeAfterTraffic(db, user.id);
   const profile = getLuckyProfileByUser(user);
   if (!result.ok) {
     return res.json({ ...result, ...profile });

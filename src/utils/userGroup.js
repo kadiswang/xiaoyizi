@@ -38,4 +38,3 @@ function getGroupResetConfig(db) {
 }
 
 module.exports.getGroupResetConfig = getGroupResetConfig;
-module.exports.GROUP_RESET_DEFAULTS = GROUP_RESET_DEFAULTS;

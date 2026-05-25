@@ -9,10 +9,6 @@ function toSafeText(value, maxLen = 255) {
   return String(value == null ? '' : value).slice(0, maxLen);
 }
 
-function normalizeUa(value) {
-  return String(value == null ? '' : value).trim().toLowerCase();
-}
-
 function buildRiskLevel(row) {
   const req = Number(row.request_count || 0);
   const deny = Number(row.deny_count || 0);
@@ -94,16 +90,6 @@ function getSubAccessIPs(userId, hours = 24) {
     WHERE user_id = ? AND created_at > datetime('now', '-' || ? || ' hours')
     GROUP BY ip ORDER BY count DESC
   `).all(userId, hours);
-}
-
-function getSubAbuseUsers(hours = 24, minIPs = 3) {
-  return _getDb().prepare(`
-    SELECT user_id, COUNT(DISTINCT ip) as ip_count, GROUP_CONCAT(DISTINCT ip) as ips
-    FROM sub_access_log
-    WHERE created_at > datetime('now', '-' || ? || ' hours')
-    GROUP BY user_id HAVING ip_count >= ?
-    ORDER BY ip_count DESC
-  `).all(hours, minIPs);
 }
 
 function getSubAccessStats(hours = 24, limit = 50, offset = 0, onlyHigh = false, sort = 'count') {
@@ -434,7 +420,6 @@ module.exports = {
   clearSubAccessWindow,
   logSubAccessEvent,
   getSubAccessIPs,
-  getSubAbuseUsers,
   getSubAccessStats,
   getSubEventOverview,
   getSubAccessStatsV2,

@@ -592,7 +592,6 @@ module.exports = {
   closeDb,
   reopenDb,
   // 用户
-  findOrCreateUser: () => { throw new Error('OAuth removed'); },
   getUserBySubToken: callWithDb((...a) => userRepo.getUserBySubToken(...a)),
   getUserById: callWithDb((...a) => userRepo.getUserById(...a)),
   getUsersByIds: callWithDb((...a) => userRepo.getUsersByIds(...a)),
@@ -635,8 +634,6 @@ module.exports = {
   // 流量
   recordTraffic: callWithDb((...a) => trafficRepo.recordTraffic(...a)),
   getUserTraffic: callWithDb((...a) => trafficRepo.getUserTraffic(...a)),
-  getAllUsersTraffic: callWithDb((...a) => trafficRepo.getAllUsersTraffic(...a)),
-  getNodeTraffic: callWithDb((...a) => trafficRepo.getNodeTraffic(...a)),
   getHostTraffic: callWithDb((...a) => trafficRepo.getHostTraffic(...a)),
   getGlobalTraffic: callWithDb((...a) => trafficRepo.getGlobalTraffic(...a)),
   cleanupTrafficHistory: callWithDb((...a) => trafficRepo.cleanupTrafficHistory(...a)),
@@ -664,7 +661,6 @@ module.exports = {
   clearSubAccessWindow: callWithDb((...a) => subAccessRepo.clearSubAccessWindow(...a)),
   logSubAccessEvent: callWithDb((...a) => subAccessRepo.logSubAccessEvent(...a)),
   getSubAccessIPs: callWithDb((...a) => subAccessRepo.getSubAccessIPs(...a)),
-  getSubAbuseUsers: callWithDb((...a) => subAccessRepo.getSubAbuseUsers(...a)),
   getSubAccessStats: callWithDb((...a) => subAccessRepo.getSubAccessStats(...a)),
   getSubEventOverview: callWithDb((...a) => subAccessRepo.getSubEventOverview(...a)),
   getSubAccessStatsV2: callWithDb((...a) => subAccessRepo.getSubAccessStatsV2(...a)),
@@ -675,7 +671,6 @@ module.exports = {
   updateDiagnosis: callWithDb((...a) => opsRepo.updateDiagnosis(...a)),
   getDiagnosis: callWithDb((...a) => opsRepo.getDiagnosis(...a)),
   getAllDiagnoses: callWithDb((...a) => opsRepo.getAllDiagnoses(...a)),
-  clearDiagnoses: callWithDb((...a) => opsRepo.clearDiagnoses(...a)),
   addDiaryEntry: callWithDb((...a) => opsRepo.addDiaryEntry(...a)),
   getDiaryEntries: callWithDb((...a) => opsRepo.getDiaryEntries(...a)),
   getDiaryStats: callWithDb((...a) => opsRepo.getDiaryStats(...a)),

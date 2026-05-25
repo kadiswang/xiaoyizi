@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../services/database');
 const agentWs = require('../services/agent-ws');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
 
 // 按 ssh_host 合并同机节点
 function groupNodesByMachine(nodes, agentMap, metricsMap) {

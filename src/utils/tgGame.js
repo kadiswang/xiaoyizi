@@ -58,8 +58,26 @@ function weightedRandom(prizes) {
   return prizes[prizes.length - 1];
 }
 
+// ─── 游戏路由公共函数（供 flipGame / rpsGame / luckyWheel 复用）───
+
+// 通过 telegram_id 查找用户
+function getUserByTelegramId(db, telegramId) {
+  return db.getDb().prepare('SELECT * FROM users WHERE telegram_id = ?').get(String(telegramId));
+}
+
+// 用户因流量限额被冻结的话，签到/游戏获得流量后自动解冻
+function tryUnfreezeAfterTraffic(db, userId) {
+  const user = db.getUserById(userId);
+  if (user && user.is_frozen && user.freeze_reason === 'traffic_limit' && !db.isTrafficExceeded(userId)) {
+    db.unfreezeUser(userId);
+    db.addAuditLog(null, 'traffic_limit_unfreeze', `签到/游戏增加流量后自动解冻: ${user.username}`, 'system');
+    try { require('../services/configEvents').emitSyncAll(); } catch (_) {}
+  }
+}
+
 module.exports = {
   TG_TIMEZONE, TG_INITDATA_MAX_AGE_SEC,
   getTzDateParts, shiftIsoDate, today, weekKey,
   verifyTgInitData, weightedRandom,
+  getUserByTelegramId, tryUnfreezeAfterTraffic,
 };
