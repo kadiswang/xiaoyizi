@@ -75,44 +75,86 @@ function wrapSingboxConfig(outbounds, tags) {
 }
 
 // Clash Meta (mihomo) 订阅
-function generateClashSub(nodes) {
-  const proxies = nodes.map(n => {
-    const p = {
-      name: n.name, type: 'vless', server: n.host, port: n.port,
-      uuid: n.uuid, network: n.network || 'tcp', udp: true
+// ─── 订阅节点对象 builders（提取以消除多处重复）───
+
+function buildVlessClashProxy(n) {
+  const p = {
+    name: n.name, type: 'vless', server: n.host, port: n.port,
+    uuid: n.uuid, network: n.network || 'tcp', udp: true
+  };
+  if (n.reality_public_key) {
+    p.tls = true;
+    p.servername = n.sni || 'www.microsoft.com';
+    p['reality-opts'] = {
+      'public-key': n.reality_public_key,
+      'short-id': n.reality_short_id || ''
     };
-    if (n.reality_public_key) {
-      p.tls = true;
-      p.servername = n.sni || 'www.microsoft.com';
-      p['reality-opts'] = {
-        'public-key': n.reality_public_key,
-        'short-id': n.reality_short_id || ''
-      };
-      p['client-fingerprint'] = 'chrome';
-      p.flow = 'xtls-rprx-vision';
-    }
-    return p;
-  });
+    p['client-fingerprint'] = 'chrome';
+    p.flow = 'xtls-rprx-vision';
+  }
+  return p;
+}
+
+function buildVlessSingboxOutbound(n) {
+  const o = {
+    tag: n.name, type: 'vless', server: n.host, server_port: n.port,
+    uuid: n.uuid, network: n.network || 'tcp'
+  };
+  if (n.reality_public_key) {
+    o.flow = 'xtls-rprx-vision';
+    o.tls = {
+      enabled: true, server_name: n.sni || 'www.microsoft.com',
+      utls: { enabled: true, fingerprint: 'chrome' },
+      reality: { enabled: true, public_key: n.reality_public_key, short_id: n.reality_short_id || '' }
+    };
+  }
+  return o;
+}
+
+function buildHy2ClashProxy(n) {
+  const userId = n._userId || '0';
+  const pwd = n.userPassword || n.ss_password || '';
+  const p = {
+    name: n.name, type: 'hysteria2',
+    server: n.host, port: parseInt(n.hy2_port || n.port, 10),
+    password: `u-${userId}-h:${pwd}`,
+    sni: n.hy2_sni || 'bing.com',
+    'skip-cert-verify': true,
+  };
+  if (n.hy2_obfs) {
+    p.obfs = 'salamander';
+    p['obfs-password'] = n.hy2_obfs;
+  }
+  return p;
+}
+
+function buildHy2SingboxOutbound(n) {
+  const userId = n._userId || '0';
+  const pwd = n.userPassword || n.ss_password || '';
+  const o = {
+    tag: n.name, type: 'hysteria2',
+    server: n.host, server_port: parseInt(n.hy2_port || n.port, 10),
+    password: `u-${userId}-h:${pwd}`,
+    tls: {
+      enabled: true,
+      server_name: n.hy2_sni || 'bing.com',
+      insecure: true,
+    },
+  };
+  if (n.hy2_obfs) {
+    o.obfs = { type: 'salamander', password: n.hy2_obfs };
+  }
+  return o;
+}
+
+function generateClashSub(nodes) {
+  const proxies = nodes.map(buildVlessClashProxy);
   return clashConfigToYaml(wrapClashConfig(proxies, nodes.map(n => n.name)));
 }
 
 // sing-box 订阅
 function generateSingboxSub(nodes) {
-  const outbounds = nodes.map(n => {
-    const o = {
-      tag: n.name, type: 'vless', server: n.host, server_port: n.port,
-      uuid: n.uuid, network: n.network || 'tcp'
-    };
-    if (n.reality_public_key) {
-      o.flow = 'xtls-rprx-vision';
-      o.tls = {
-        enabled: true, server_name: n.sni || 'www.microsoft.com',
-        utls: { enabled: true, fingerprint: 'chrome' },
-        reality: { enabled: true, public_key: n.reality_public_key, short_id: n.reality_short_id || '' }
-      };
-    }
-    return o;
-  });
+  const outbounds = nodes.map(buildVlessSingboxOutbound);
   return JSON.stringify(wrapSingboxConfig(outbounds, nodes.map(n => n.name)), null, 2);
 }
 
@@ -186,44 +228,12 @@ function generateV2rayHy2Sub(nodes, trafficInfo) {
 }
 
 function generateClashHy2Sub(nodes) {
-  const proxies = nodes.map(n => {
-    const userId = n._userId || '0';
-    const pwd = n.userPassword || n.ss_password || '';
-    const p = {
-      name: n.name, type: 'hysteria2',
-      server: n.host, port: parseInt(n.hy2_port || n.port, 10),
-      password: `u-${userId}-h:${pwd}`,
-      sni: n.hy2_sni || 'bing.com',
-      'skip-cert-verify': true,
-    };
-    if (n.hy2_obfs) {
-      p.obfs = 'salamander';
-      p['obfs-password'] = n.hy2_obfs;
-    }
-    return p;
-  });
+  const proxies = nodes.map(buildHy2ClashProxy);
   return clashConfigToYaml(wrapClashConfig(proxies, nodes.map(n => n.name)));
 }
 
 function generateSingboxHy2Sub(nodes) {
-  const outbounds = nodes.map(n => {
-    const userId = n._userId || '0';
-    const pwd = n.userPassword || n.ss_password || '';
-    const o = {
-      tag: n.name, type: 'hysteria2',
-      server: n.host, server_port: parseInt(n.hy2_port || n.port, 10),
-      password: `u-${userId}-h:${pwd}`,
-      tls: {
-        enabled: true,
-        server_name: n.hy2_sni || 'bing.com',
-        insecure: true,
-      },
-    };
-    if (n.hy2_obfs) {
-      o.obfs = { type: 'salamander', password: n.hy2_obfs };
-    }
-    return o;
-  });
+  const outbounds = nodes.map(buildHy2SingboxOutbound);
   return JSON.stringify(wrapSingboxConfig(outbounds, nodes.map(n => n.name)), null, 2);
 }
 
@@ -306,46 +316,17 @@ function generateV2rayAllSub(vlessNodes, hy2Nodes, trafficInfo) {
 }
 
 function generateClashAllSub(vlessNodes, hy2Nodes) {
-  const vlessProxies = vlessNodes.map(n => {
-    const p = { name: n.name, type: 'vless', server: n.host, port: n.port, uuid: n.uuid, network: n.network || 'tcp', udp: true };
-    if (n.reality_public_key) {
-      p.tls = true; p.servername = n.sni || 'www.microsoft.com';
-      p['reality-opts'] = { 'public-key': n.reality_public_key, 'short-id': n.reality_short_id || '' };
-      p['client-fingerprint'] = 'chrome'; p.flow = 'xtls-rprx-vision';
-    }
-    return p;
-  });
-  const hy2Proxies = hy2Nodes.map(n => {
-    const userId = n._userId || '0'; const pwd = n.userPassword || n.ss_password || '';
-    const p = { name: n.name, type: 'hysteria2', server: n.host, port: parseInt(n.hy2_port || n.port, 10), password: `u-${userId}-h:${pwd}`, sni: n.hy2_sni || 'bing.com', 'skip-cert-verify': true };
-    if (n.hy2_obfs) { p.obfs = 'salamander'; p['obfs-password'] = n.hy2_obfs; }
-    return p;
-  });
-  const all = [...vlessProxies, ...hy2Proxies];
+  const all = [...vlessNodes.map(buildVlessClashProxy), ...hy2Nodes.map(buildHy2ClashProxy)];
   return clashConfigToYaml(wrapClashConfig(all, all.map(n => n.name)));
 }
 
 function generateSingboxAllSub(vlessNodes, hy2Nodes) {
-  const vlessOut = vlessNodes.map(n => {
-    const o = { tag: n.name, type: 'vless', server: n.host, server_port: n.port, uuid: n.uuid, network: n.network || 'tcp' };
-    if (n.reality_public_key) {
-      o.flow = 'xtls-rprx-vision';
-      o.tls = { enabled: true, server_name: n.sni || 'www.microsoft.com', utls: { enabled: true, fingerprint: 'chrome' }, reality: { enabled: true, public_key: n.reality_public_key, short_id: n.reality_short_id || '' } };
-    }
-    return o;
-  });
-  const hy2Out = hy2Nodes.map(n => {
-    const userId = n._userId || '0'; const pwd = n.userPassword || n.ss_password || '';
-    const o = { tag: n.name, type: 'hysteria2', server: n.host, server_port: parseInt(n.hy2_port || n.port, 10), password: `u-${userId}-h:${pwd}`, tls: { enabled: true, server_name: n.hy2_sni || 'bing.com', insecure: true } };
-    if (n.hy2_obfs) { o.obfs = { type: 'salamander', password: n.hy2_obfs }; }
-    return o;
-  });
-  const all = [...vlessOut, ...hy2Out];
+  const all = [...vlessNodes.map(buildVlessSingboxOutbound), ...hy2Nodes.map(buildHy2SingboxOutbound)];
   return JSON.stringify(wrapSingboxConfig(all, all.map(n => n.tag)), null, 2);
 }
 
 module.exports = {
-  buildVlessLink, generateV2raySub, generateClashSub, generateSingboxSub,
+  buildVlessLink,
   generateV2raySubForUser: generateV2raySub,
   generateClashSubForUser: generateClashSub,
   generateSingboxSubForUser: generateSingboxSub,

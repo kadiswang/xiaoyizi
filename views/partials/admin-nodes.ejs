@@ -247,9 +247,6 @@
 </div>
 
 <script nonce="<%= nonce %>">
-// CSRF token
-const _csrf = '<%= csrfToken %>';
-
 function openNodeEditModal(id, name, host) {
   const modal = document.getElementById('node-edit-modal');
   const form = document.getElementById('node-edit-form');
@@ -261,7 +258,7 @@ function openNodeEditModal(id, name, host) {
   form.action = '/admin/api/nodes/' + id + '/update-basic';
   modal.classList.remove('hidden');
   // 加载当前流量上限
-  fetch('/admin/api/nodes/' + id + '/info', { headers: { 'X-CSRF-Token': _csrf } })
+  fetch('/admin/api/nodes/' + id + '/info', { headers: { 'X-CSRF-Token': window._csrf || '' } })
     .then(r => r.json()).then(d => {
       if (d.traffic_cap) document.getElementById('node-edit-cap').value = (d.traffic_cap / 1099511627776).toFixed(2);
       document.getElementById('node-edit-rate').value = d.traffic_rate ?? 1;
@@ -375,7 +372,7 @@ async function restartXray(nodeId, btn) {
   btn.disabled = true;
   try {
     const resp = await fetch(`/admin/api/nodes/${nodeId}/restart-xray`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrf },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window._csrf || '' },
       body: JSON.stringify({})
     });
     const data = await resp.json();
@@ -439,7 +436,7 @@ document.getElementById('node-edit-form')?.addEventListener('submit', function o
 document.getElementById('btn-save-traffic-cap')?.addEventListener('click', async () => {
   const id = document.getElementById('node-edit-id').value;
   const cap_tb = document.getElementById('node-edit-cap').value;
-  const res = await fetch('/admin/api/nodes/' + id + '/traffic-cap', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': _csrf }, body: JSON.stringify({ cap_tb }) });
+  const res = await fetch('/admin/api/nodes/' + id + '/traffic-cap', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': window._csrf || '' }, body: JSON.stringify({ cap_tb }) });
   toast(res.ok ? '✅ 流量上限已设置（同机节点已同步）' : '❌ 设置失败');
 });
 

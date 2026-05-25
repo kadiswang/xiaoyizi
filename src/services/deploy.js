@@ -307,13 +307,7 @@ async function pushConfigToNode(node, config) {
   // SSH 后备
   const ssh = new NodeSSH();
   try {
-    const connectOpts = {
-      host: node.ssh_host || node.host,
-      port: node.ssh_port || 22,
-      username: node.ssh_user || 'root',
-    };
-    if (node.ssh_key_path) connectOpts.privateKeyPath = node.ssh_key_path;
-    else if (node.ssh_password) connectOpts.password = node.ssh_password;
+    const connectOpts = buildSshConnectOpts(node);
 
     await ssh.connect(connectOpts);
 
@@ -354,13 +348,7 @@ async function pushHy2ConfigToNode(node, configYaml) {
   // SSH 后备
   const ssh = new NodeSSH();
   try {
-    const connectOpts = {
-      host: node.ssh_host || node.host,
-      port: node.ssh_port || 22,
-      username: node.ssh_user || 'root',
-    };
-    if (node.ssh_key_path) connectOpts.privateKeyPath = node.ssh_key_path;
-    else if (node.ssh_password) connectOpts.password = node.ssh_password;
+    const connectOpts = buildSshConnectOpts(node);
 
     await ssh.connect(connectOpts);
     await sftpWriteFile(ssh, '/etc/hysteria/config.yaml', configYaml);
@@ -530,8 +518,11 @@ async function resolveDeployGeo(sshInfo) {
 }
 
 function buildSshConnectOpts(sshInfo) {
+  // 兼容两种调用形态：
+  // 1) sshInfo 来自 node 表（含 ssh_host 字段，需 fallback 到 host）
+  // 2) sshInfo 来自部署请求（host 字段直接是 SSH 地址）
   const opts = {
-    host: sshInfo.host,
+    host: sshInfo.ssh_host || sshInfo.host,
     port: sshInfo.ssh_port || 22,
     username: sshInfo.ssh_user || 'root',
   };
@@ -571,13 +562,7 @@ async function deployNode(sshInfo, db) {
 
   const ssh = new NodeSSH();
   try {
-    const connectOpts = {
-      host: sshInfo.host,
-      port: sshInfo.ssh_port || 22,
-      username: sshInfo.ssh_user || 'root',
-    };
-    if (sshInfo.ssh_key_path) connectOpts.privateKeyPath = sshInfo.ssh_key_path;
-    else if (sshInfo.ssh_password) connectOpts.password = sshInfo.ssh_password;
+    const connectOpts = buildSshConnectOpts(sshInfo);
 
     logger.info({ nodeName: name, host: sshInfo.host }, '节点部署开始');
     await ssh.connect(connectOpts);
@@ -844,15 +829,7 @@ async function deploySsNode(sshInfo, db) {
   const ssPassword = crypto.randomBytes(16).toString('base64');
   const ssMethod = sshInfo.ss_method || 'aes-256-gcm';
 
-  const geo = await detectRegion(sshInfo.host);
-  let displayGeo = geo;
-  const hasSocks5 = !!sshInfo.socks5_host;
-  if (hasSocks5) {
-    const socks5Geo = await detectRegion(sshInfo.socks5_host);
-    if (socks5Geo.city && socks5Geo.city !== 'Unknown' && socks5Geo.cityCN !== '未知') {
-      displayGeo = socks5Geo;
-    }
-  }
+  const { displayGeo, isHomeNetwork: hasSocks5 } = await resolveDeployGeo(sshInfo);
   const region = `${displayGeo.emoji} ${displayGeo.cityCN}`;
   const { name, result } = insertNodeWithGeneratedName(db, (generatedName) => ({
     name: generatedName, host: sshInfo.host, port, uuid: '00000000-0000-0000-0000-000000000000',
@@ -872,13 +849,7 @@ async function deploySsNode(sshInfo, db) {
 
   const ssh = new NodeSSH();
   try {
-    const connectOpts = {
-      host: sshInfo.host,
-      port: sshInfo.ssh_port || 22,
-      username: sshInfo.ssh_user || 'root',
-    };
-    if (sshInfo.ssh_key_path) connectOpts.privateKeyPath = sshInfo.ssh_key_path;
-    else if (sshInfo.ssh_password) connectOpts.password = sshInfo.ssh_password;
+    const connectOpts = buildSshConnectOpts(sshInfo);
 
     logger.info({ nodeName: name, host: sshInfo.host }, 'SS 部署开始');
     await ssh.connect(connectOpts);
@@ -971,14 +942,7 @@ async function deployDualNode(sshInfo, db) {
   const ssPassword = crypto.randomBytes(16).toString('base64');
   const ssMethod = sshInfo.ss_method || 'aes-256-gcm';
 
-  const geo = await detectRegion(sshInfo.host);
-  let displayGeo = geo;
-  let isHomeNetwork = false;
-  if (sshInfo.socks5_host) {
-    isHomeNetwork = true;
-    const socks5Geo = await detectRegion(sshInfo.socks5_host);
-    if (socks5Geo.city && socks5Geo.city !== 'Unknown' && socks5Geo.cityCN !== '未知') displayGeo = socks5Geo;
-  }
+  const { displayGeo, isHomeNetwork } = await resolveDeployGeo(sshInfo);
 
   const region = `${displayGeo.emoji} ${displayGeo.cityCN}`;
   const { vlessName, ssName, vlessResult, ssResult } = insertDualNodesWithGeneratedName(
@@ -1016,12 +980,7 @@ async function deployDualNode(sshInfo, db) {
 
   const ssh = new NodeSSH();
   try {
-    const connectOpts = {
-      host: sshInfo.host, port: sshInfo.ssh_port || 22,
-      username: sshInfo.ssh_user || 'root',
-    };
-    if (sshInfo.ssh_key_path) connectOpts.privateKeyPath = sshInfo.ssh_key_path;
-    else if (sshInfo.ssh_password) connectOpts.password = sshInfo.ssh_password;
+    const connectOpts = buildSshConnectOpts(sshInfo);
 
     logger.info({ vlessName, ssName, host: sshInfo.host }, '双协议部署开始');
     await ssh.connect(connectOpts);
@@ -1195,15 +1154,7 @@ async function deployHy2Node(sshInfo, db) {
   const port = randomPort();
   const statsSecret = crypto.randomBytes(16).toString('hex');
 
-  const geo = await detectRegion(sshInfo.host);
-  let displayGeo = geo;
-  const hasSocks5 = !!sshInfo.socks5_host;
-  if (hasSocks5) {
-    const socks5Geo = await detectRegion(sshInfo.socks5_host);
-    if (socks5Geo.city && socks5Geo.city !== 'Unknown' && socks5Geo.cityCN !== '未知') {
-      displayGeo = socks5Geo;
-    }
-  }
+  const { displayGeo, isHomeNetwork: hasSocks5 } = await resolveDeployGeo(sshInfo);
   const region = `${displayGeo.emoji} ${displayGeo.cityCN}`;
   const { name, result } = insertNodeWithGeneratedName(db, (generatedName) => ({
     name: generatedName, host: sshInfo.host, port, uuid: '00000000-0000-0000-0000-000000000000',
@@ -1231,13 +1182,7 @@ async function deployHy2Node(sshInfo, db) {
 
   const ssh = new NodeSSH();
   try {
-    const connectOpts = {
-      host: sshInfo.host,
-      port: sshInfo.ssh_port || 22,
-      username: sshInfo.ssh_user || 'root',
-    };
-    if (sshInfo.ssh_key_path) connectOpts.privateKeyPath = sshInfo.ssh_key_path;
-    else if (sshInfo.ssh_password) connectOpts.password = sshInfo.ssh_password;
+    const connectOpts = buildSshConnectOpts(sshInfo);
 
     logger.info({ nodeName: name, host: sshInfo.host }, 'Hy2 部署开始');
     await ssh.connect(connectOpts);
