@@ -617,6 +617,21 @@ async function installAgentOnNode(ssh, nodeId, db) {
   await sftpWriteFile(ssh, '/etc/vless-agent/config.json', configJson);
   await ssh.execCommand('chmod 600 /etc/vless-agent/config.json');
 
+  // IPv6 节点修复：xray 转发场景下 IPv6 forwarding=1，Linux 默认会忽略 RA 默认路由，
+  // 需要 accept_ra=2 才能在转发模式下接受 RA。AWS VPC 某些子网仅靠 RA 广播默认网关，
+  // 不修则会出现「IPv6 地址有但 ::/0 路由缺失」导致出站全断。
+  if (needCheckIPv6) {
+    const sysctlConf = [
+      '# 修复 IPv6 转发场景下 RA 默认路由不被接受的问题',
+      'net.ipv6.conf.all.accept_ra = 2',
+      'net.ipv6.conf.default.accept_ra = 2',
+    ].join('\n');
+    await sftpWriteFile(ssh, '/etc/sysctl.d/99-ipv6-accept-ra.conf', sysctlConf);
+    await ssh.execCommand('sysctl -p /etc/sysctl.d/99-ipv6-accept-ra.conf >/dev/null 2>&1 || true');
+    // 对所有以太网接口立即生效
+    await ssh.execCommand("for iface in $(ls /sys/class/net 2>/dev/null | grep -E '^(eth|ens|enp)'); do sysctl -w net.ipv6.conf.${iface}.accept_ra=2 >/dev/null 2>&1 || true; done");
+  }
+
   // 创建 systemd service 并启动
   const nodeBin = (await ssh.execCommand('which node')).stdout.trim() || '/usr/bin/node';
   const serviceTemplate = fs.readFileSync(path.join(__dirname, '..', '..', 'templates', 'vless-agent.service'), 'utf8');

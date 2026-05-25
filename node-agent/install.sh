@@ -36,6 +36,24 @@ fi
 NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
 echo "Node.js 版本: $(node -v)"
 
+# IPv6 节点修复：当 IPv6 forwarding 开启（如 xray 转发场景）时，
+# Linux 默认会忽略 RA 默认路由（accept_ra=1 失效），需要 accept_ra=2 才能在
+# 转发模式下接受 RA。AWS VPC 的某些子网仅通过 RA 广播默认网关，
+# 不修则会出现「IPv6 地址有但 ::/0 路由缺失」导致出站全断。
+if [ "$CHECK_IPV6" = "true" ]; then
+  cat > /etc/sysctl.d/99-ipv6-accept-ra.conf <<'SYSCTL_EOF'
+# 修复 IPv6 转发场景下 RA 默认路由不被接受的问题
+net.ipv6.conf.all.accept_ra = 2
+net.ipv6.conf.default.accept_ra = 2
+SYSCTL_EOF
+  sysctl -p /etc/sysctl.d/99-ipv6-accept-ra.conf >/dev/null 2>&1 || true
+  # 对当前活跃接口立即生效
+  for iface in $(ls /sys/class/net | grep -E '^(eth|ens|enp)'); do
+    sysctl -w net.ipv6.conf.${iface}.accept_ra=2 >/dev/null 2>&1 || true
+  done
+  echo "✅ IPv6 accept_ra 已配置为 2（转发模式下接受 RA 默认路由）"
+fi
+
 # 创建配置（使用 node 安全生成 JSON，防止变量注入）
 mkdir -p "$CONFIG_DIR"
 node -e "
