@@ -28,8 +28,8 @@
         </div>
       </div>
       <div class="grid grid-cols-2 gap-2 text-xs">
-        <div><span class="text-gray-500">地址</span>
-          <code class="block text-gray-400 break-all mt-0.5" id="host-display-m-<%= n.id %>"><%= n.host %></code>
+        <div class="min-w-0"><span class="text-gray-500">地址</span>
+          <code class="block text-gray-400 break-all mt-0.5 font-mono" style="font-size:10px" id="host-display-m-<%= n.id %>" title="<%= n.host %>"><%= n.host %></code>
         </div>
         <div><span class="text-gray-500">端口</span><span class="block text-gray-300 mt-0.5"><%= n.port %></span></div>
         <div><span class="text-gray-500">用户组</span>
@@ -81,7 +81,7 @@
           <tr class="border-b border-white/5 hover:bg-white/[0.02]" data-node-id="<%= n.id %>">
             <td class="py-3 px-4 font-medium text-white text-xs"><%= n.name %> <% if (n.protocol === 'ss') { %><span class="text-[10px] bg-cyan-800/60 text-cyan-300 px-1.5 py-0.5 rounded">SS</span><% } else if (n.protocol === 'hy2') { %><span class="text-[10px] bg-amber-800/60 text-amber-300 px-1.5 py-0.5 rounded">Hy2</span><% } else { %><span class="text-[10px] bg-indigo-800/60 text-indigo-300 px-1.5 py-0.5 rounded">VLESS</span><% } %></td>
             <td class="py-3 px-4">
-              <code class="text-xs text-gray-400 break-all" id="host-display-<%= n.id %>"><%= n.host %></code>
+              <code class="block text-xs text-gray-400 truncate font-mono" style="max-width:180px" id="host-display-<%= n.id %>" title="<%= n.host %>"><%= n.host %></code>
             </td>
             <td class="py-3 px-4 text-xs"><%= n.port %></td>
             <td class="py-3 px-4">
