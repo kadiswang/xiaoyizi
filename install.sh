@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
 # ══════════════════════════════════════════════════════════════
 # 小姨子 一键部署 v4.2
@@ -16,6 +16,23 @@ ok()   { echo -e "${G}[✓]${N} $1"; }
 warn() { echo -e "${Y}[!]${N} $1"; }
 err()  { echo -e "${R}[✗]${N} $1"; exit 1; }
 info() { echo -e "${C}[i]${N} $1"; }
+
+# 错误兜底：set -e 触发或脚本异常退出时打印失败步骤
+on_error() {
+  local rc=$?
+  local lineno=$1
+  echo ""
+  echo -e "${R}══════════════════════════════════════════════${N}"
+  echo -e "${R}[✗] 安装中断，退出码 $rc，行号 $lineno${N}"
+  echo -e "${R}══════════════════════════════════════════════${N}"
+  echo -e "${Y}排查方式：${N}"
+  echo -e "  1) 直接看屏幕上方最后一条错误信息"
+  echo -e "  2) 检查网络：curl -I https://github.com  （超时 = 网络受限）"
+  echo -e "  3) 检查 apt：apt update  （单独跑试试）"
+  echo -e "  4) 重新运行同样命令通常是安全的，不会破坏现有数据"
+  exit $rc
+}
+trap 'on_error $LINENO' ERR
 
 banner() {
   echo ""
@@ -40,13 +57,22 @@ preflight() {
   local mem_mb; mem_mb=$(free -m | awk '/^Mem:/{print $2}')
   info "内存: ${mem_mb} MB"
   [ "$mem_mb" -lt 256 ] && warn "内存较低，建议 ≥512MB"
+
+  # npm install 较吃内存（≥500MB），低内存机器若无 swap 会 OOM 导致脚本静默失败
+  if [ "$mem_mb" -lt 1024 ]; then
+    local swap_mb; swap_mb=$(free -m | awk '/^Swap:/{print $2}')
+    if [ "${swap_mb:-0}" -lt 512 ]; then
+      warn "内存 ${mem_mb}MB + Swap ${swap_mb:-0}MB 偏低，npm install 可能 OOM"
+      warn "建议先执行：fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile"
+    fi
+  fi
 }
 
 # ─── 安装系统依赖 ──────────────────────────────────────────
 
 install_deps() {
   ok "更新包索引..."
-  apt update -qq 2>/dev/null
+  apt update -qq
 
   local pkgs=(curl git nginx certbot python3-certbot-nginx build-essential)
   local need=()
@@ -55,7 +81,7 @@ install_deps() {
   done
   if [ ${#need[@]} -gt 0 ]; then
     ok "安装: ${need[*]}"
-    DEBIAN_FRONTEND=noninteractive apt install -y -qq "${need[@]}" 2>/dev/null
+    DEBIAN_FRONTEND=noninteractive apt install -y -qq "${need[@]}"
   else
     ok "系统依赖已就绪"
   fi
@@ -69,8 +95,8 @@ install_node() {
     return
   fi
   ok "安装 Node.js ${NODE_MAJOR}..."
-  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - 2>/dev/null
-  apt install -y -qq nodejs 2>/dev/null
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+  apt install -y -qq nodejs
   ok "Node.js $(node -v) ✓"
 }
 
@@ -80,7 +106,7 @@ install_pm2() {
     return
   fi
   ok "安装 PM2..."
-  npm install -g pm2 --silent 2>/dev/null
+  npm install -g pm2 --silent
   ok "PM2 已安装"
 }
 
@@ -98,8 +124,9 @@ deploy_code() {
   fi
 
   ok "安装依赖包..."
-  npm install --omit=dev --no-audit --no-fund --silent 2>/dev/null
+  npm install --omit=dev --no-audit --no-fund --silent
   mkdir -p data/logs backups
+  chmod 700 backups || true
   ok "代码部署完成"
 }
 
