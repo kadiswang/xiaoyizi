@@ -7,6 +7,7 @@ const dns = require('dns').promises;
 const { randomPort } = require('../utils/vless');
 const { BEAUTIFUL_NAMES } = require('../utils/names');
 const { getRegionEmoji, getCityCN } = require('../utils/regions');
+const { isPrivateOrLoopback } = require('../utils/clientIp');
 const { notify } = require('./notify');
 const logger = require('./logger');
 
@@ -75,6 +76,19 @@ async function detectRegionByAwsPtr(ip) {
 }
 
 async function detectRegion(ip) {
+  // 防 SSRF：拒绝内网/回环/链路本地 IP（包括云元数据服务 169.254.169.254）
+  // 这些地址不应该出现在 detectRegion 的合法输入中（公网节点 IP），
+  // 防止恶意输入诱导服务端探测内网或元数据服务。
+  if (!ip || typeof ip !== 'string') {
+    return { city: 'Unknown', region: '', country: '', cityCN: '未知', emoji: '🌐' };
+  }
+  try {
+    if (isPrivateOrLoopback(ip)) {
+      logger.warn({ ip }, '地区检测拒绝：私有/内网/链路本地 IP');
+      return { city: 'Unknown', region: '', country: '', cityCN: '未知', emoji: '🌐' };
+    }
+  } catch (_) { /* 解析失败也视为非法 */ }
+
   // 优先：AWS PTR 识别（无外网依赖、最准、最快）
   const awsGeo = await detectRegionByAwsPtr(ip);
   if (awsGeo) return awsGeo;

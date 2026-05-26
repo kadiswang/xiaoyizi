@@ -332,4 +332,26 @@ function gracefulShutdown(signal) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
+// 全局异常兜底：未捕获的异常和 Promise rejection 不再让进程立即崩溃
+// 记录详细日志后通过 graceful shutdown 退出（PM2 会自动重启）
+process.on('uncaughtException', (err) => {
+  try {
+    logger.fatal({ err: { message: err.message, stack: err.stack, name: err.name } }, 'uncaughtException — 启动 graceful shutdown');
+  } catch (_) {
+    console.error('uncaughtException:', err);
+  }
+  // 给日志一点时间落盘，再触发关闭
+  setTimeout(() => gracefulShutdown('uncaughtException'), 200);
+});
+
+process.on('unhandledRejection', (reason) => {
+  try {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    logger.error({ err: { message: err.message, stack: err.stack } }, 'unhandledRejection — 已捕获，进程继续运行');
+  } catch (_) {
+    console.error('unhandledRejection:', reason);
+  }
+  // unhandledRejection 不立即退出（多数为业务侧 Promise 链断裂），仅记录
+});
+
 module.exports = app;

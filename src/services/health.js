@@ -530,6 +530,22 @@ function saveTrafficRecords(nodeId, records, routeCtx = null) {
 // 用户单日流量预警（独立于硬限额，给已绑定 TG 的用户私信提醒）
 const _trafficAlertNotified = new Map(); // userId → 上次通知日期 (YYYY-MM-DD)
 
+// 每天凌晨清理：保留今日条目，丢弃过期日期
+function cleanupTrafficAlertCache() {
+  try {
+    const today = require('../utils/time').dateKeyInTimeZone(new Date(), 'Asia/Shanghai');
+    let removed = 0;
+    for (const [uid, date] of _trafficAlertNotified) {
+      if (date !== today) {
+        _trafficAlertNotified.delete(uid);
+        removed++;
+      }
+    }
+    if (removed > 0) logger.debug({ removed, kept: _trafficAlertNotified.size }, 'trafficAlertCache cleaned');
+  } catch (_) { /* 忽略 */ }
+}
+setInterval(cleanupTrafficAlertCache, 60 * 60 * 1000).unref(); // 每小时清理一次
+
 function checkUserDailyTrafficAlert(userId) {
   if (db.getSetting('traffic_alert_enabled') !== 'true') return;
   const user = db.getUserById(userId);
@@ -583,6 +599,21 @@ function checkUserTrafficLimit(userId) {
 
 // 节点流量上限检查（按同机 ssh_host 汇总）
 const _trafficCapNotified = new Set();
+let _lastTrafficCapResetMonth = -1;
+// 节点流量超限标记每月初重置（流量周期通常按月计算）
+function maybeResetTrafficCapNotified() {
+  try {
+    const now = new Date();
+    const month = now.getUTCFullYear() * 12 + now.getUTCMonth();
+    if (_lastTrafficCapResetMonth === -1) { _lastTrafficCapResetMonth = month; return; }
+    if (month !== _lastTrafficCapResetMonth) {
+      _trafficCapNotified.clear();
+      _lastTrafficCapResetMonth = month;
+      logger.info('节点流量超限缓存已按月重置');
+    }
+  } catch (_) { /* 忽略 */ }
+}
+setInterval(maybeResetTrafficCapNotified, 60 * 60 * 1000).unref(); // 每小时检查一次
 function checkNodeTrafficCap(nodeId) {
   const snapshot = getNodeSnapshot();
   const node = snapshot.byId.get(nodeId) || db.getNodeById(nodeId);
@@ -1209,4 +1240,29 @@ function checkSuddenZeroTraffic() {
   }
 }
 
-module.exports = { checkPort, getOnlineCache, updateFromAgentReport, getPeerNodes, mirrorPeerState, startZeroTrafficWatch, startStaleAgentWatch, startSuddenZeroTrafficWatch };
+// 节点被删除时清理相关内存状态，防止条目残留
+function cleanupNodeState(nodeId) {
+  if (!nodeId) return;
+  try {
+    _nodeFailCount.delete(nodeId);
+    _nodeFailCount.delete(`ipv6_${nodeId}`);
+    _nodeUserLastSeen.delete(nodeId);
+    // 清理资源告警缓存（key 形如 nodeId_disk / nodeId_mem 等）
+    for (const k of _resourceAlertCache.keys()) {
+      if (typeof k === 'string' && k.startsWith(`${nodeId}_`)) {
+        _resourceAlertCache.delete(k);
+      }
+    }
+    // 清理在线缓存中该节点条目
+    if (_onlineCache.full?.nodes) {
+      const idx = _onlineCache.full.nodes.findIndex(n => n.nodeId === nodeId);
+      if (idx >= 0) _onlineCache.full.nodes.splice(idx, 1);
+      _onlineCache.full.nodeUsers?.delete(nodeId);
+      _onlineCache.full.nodeUpdatedAt?.delete(nodeId);
+    }
+  } catch (err) {
+    logger.debug({ err, nodeId }, '清理节点内存状态失败，已忽略');
+  }
+}
+
+module.exports = { checkPort, getOnlineCache, updateFromAgentReport, getPeerNodes, mirrorPeerState, startZeroTrafficWatch, startStaleAgentWatch, startSuddenZeroTrafficWatch, cleanupNodeState };

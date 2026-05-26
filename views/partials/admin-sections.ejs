@@ -1,6 +1,7 @@
 <!-- 用户管理 Tab -->
 <script nonce="<%= nonce %>">
-  const _UG = <%- JSON.stringify(USER_GROUPS) %>;
+  // 防 </script> 突破：用 \u003c 转义所有 < 字符
+  const _UG = <%- JSON.stringify(USER_GROUPS).replace(/</g, '\\u003c') %>;
   function _groupHtml(lv) {
     const g = _UG[Math.min(Math.max(lv||0,0), _UG.length-1)];
     return `<span style="background:#b8860b;color:#fff;padding:1px 7px;border-radius:6px;font-size:11px">${g.badge ? g.badge+' ' : ''}${g.name}</span>`;

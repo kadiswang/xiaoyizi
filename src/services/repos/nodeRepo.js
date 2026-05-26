@@ -13,6 +13,8 @@ function decryptNode(node) {
   node.ssh_password = decrypt(node.ssh_password);
   node.socks5_pass = decrypt(node.socks5_pass);
   node.reality_private_key = decrypt(node.reality_private_key);
+  node.ss_password = decrypt(node.ss_password);
+  node.hy2_stats_secret = decrypt(node.hy2_stats_secret);
   return node;
 }
 
@@ -58,13 +60,13 @@ function addNode(node) {
     node.agent_token || uuidv4(),
     node.ip_version || 4,
     node.ss_method || null,
-    node.ss_password || null,
+    encrypt(node.ss_password) || null,
     node.hy2_port || null,
     node.hy2_obfs || null,
     node.hy2_sni || null,
     node.hy2_up_mbps || null,
     node.hy2_down_mbps || null,
-    node.hy2_stats_secret || null
+    encrypt(node.hy2_stats_secret) || null
   );
 }
 
@@ -76,6 +78,8 @@ function updateNode(id, fields) {
   if (safe.ssh_password !== undefined) safe.ssh_password = encrypt(safe.ssh_password) || null;
   if (safe.socks5_pass !== undefined) safe.socks5_pass = encrypt(safe.socks5_pass) || null;
   if (safe.reality_private_key !== undefined) safe.reality_private_key = encrypt(safe.reality_private_key) || null;
+  if (safe.ss_password !== undefined) safe.ss_password = encrypt(safe.ss_password) || null;
+  if (safe.hy2_stats_secret !== undefined) safe.hy2_stats_secret = encrypt(safe.hy2_stats_secret) || null;
   const sets = Object.keys(safe).map(k => `${k} = ?`).join(', ');
   const values = Object.values(safe);
   _getDb().prepare(`UPDATE nodes SET ${sets} WHERE id = ?`).run(...values, id);

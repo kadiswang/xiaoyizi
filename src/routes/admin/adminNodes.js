@@ -165,6 +165,8 @@ router.post('/nodes/:id/delete', (req, res) => {
       logger.error(`[删除节点] 停止远端服务失败: ${err.message}`);
     }
     db.deleteNode(node.id);
+    // 清理 health 模块中与该节点相关的内存状态，防止残留
+    try { require('../../services/health').cleanupNodeState(node.id); } catch (_) { /* 忽略 */ }
     db.addAuditLog(req.user.id, 'node_delete', `删除节点: ${node.name}`, req.clientIp || req.ip);
   })();
 
@@ -227,7 +229,12 @@ router.get('/nodes/:id/info', (req, res) => {
 router.post('/nodes/:id/traffic-cap', (req, res) => {
   const id = parseIntId(req.params.id);
   if (!id) return res.status(400).json({ error: '参数错误' });
-  const cap = Math.max(0, Math.round(parseFloat(req.body.cap_tb || 0) * 1099511627776)) || 0;
+  // 节点流量上限上限：10000 TB（10 PB），防止数值溢出
+  const MAX_NODE_TRAFFIC_TB = 10000;
+  let capTb = parseFloat(req.body.cap_tb || 0);
+  if (!Number.isFinite(capTb) || capTb < 0) capTb = 0;
+  if (capTb > MAX_NODE_TRAFFIC_TB) capTb = MAX_NODE_TRAFFIC_TB;
+  const cap = Math.round(capTb * 1099511627776);
   db.updateNode(id, { traffic_cap: cap });
   // 同机节点同步
   const node = db.getNodeById(id);

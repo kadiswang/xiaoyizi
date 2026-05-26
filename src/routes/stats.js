@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../services/database');
 const { requireAuth } = require('../middleware/auth');
+const { userApiLimiter } = require('../middleware/rateLimit');
 const { getOnlineCache } = require('../services/health');
 const { escapeHtml } = require('../utils/escapeHtml');
 const { dateKeyInTimeZone, formatDateTimeInTimeZone } = require('../utils/time');
@@ -99,7 +100,7 @@ function getPanelSummary(user) {
   return payload;
 }
 
-router.get('/api/panel-summary', requireAuth, (req, res) => {
+router.get('/api/panel-summary', requireAuth, userApiLimiter, (req, res) => {
   try {
     res.json(getPanelSummary(req.user));
   } catch (err) {
@@ -110,7 +111,7 @@ router.get('/api/panel-summary', requireAuth, (req, res) => {
   }
 });
 
-router.get('/api/peach-status', requireAuth, (req, res) => {
+router.get('/api/peach-status', requireAuth, userApiLimiter, (req, res) => {
   try {
     res.json(getPanelSummary(req.user).peach);
   } catch (err) {
@@ -118,7 +119,7 @@ router.get('/api/peach-status', requireAuth, (req, res) => {
   }
 });
 
-router.get('/api/stats', requireAuth, (req, res) => {
+router.get('/api/stats', requireAuth, userApiLimiter, (req, res) => {
   res.json(getPanelSummary(req.user).stats);
 });
 

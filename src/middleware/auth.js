@@ -17,17 +17,26 @@ function setupAuth(app) {
       req.isAuthenticated = () => false;
     }
     // 兼容原有的 logIn/logOut 接口
+    // 登录时 regenerate session ID，防止 Session Fixation 攻击
     req.logIn = (user, cb) => {
-      req.session.userId = user.id;
-      req.user = user;
-      req.isAuthenticated = () => true;
-      if (typeof cb === 'function') cb(null);
+      req.session.regenerate((err) => {
+        if (err) { if (typeof cb === 'function') cb(err); return; }
+        req.session.userId = user.id;
+        req.user = user;
+        req.isAuthenticated = () => true;
+        // regenerate 后必须 save 才能持久化
+        req.session.save((saveErr) => {
+          if (typeof cb === 'function') cb(saveErr || null);
+        });
+      });
     };
+    // 登出时销毁整个 session（清除 store 中的会话和 CSRF token）
     req.logout = (cb) => {
-      delete req.session.userId;
       req.user = null;
       req.isAuthenticated = () => false;
-      if (typeof cb === 'function') cb(null);
+      req.session.destroy((err) => {
+        if (typeof cb === 'function') cb(err || null);
+      });
     };
     next();
   });

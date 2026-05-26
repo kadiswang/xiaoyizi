@@ -3,6 +3,7 @@ const db = require('../services/database');
 const { buildVlessLink, buildSsLink, buildHy2Link } = require('../utils/vless');
 const { formatBytes } = require('../utils/formatBytes');
 const { requireAuth } = require('../middleware/auth');
+const { csrfProtection } = require('../middleware/csrf');
 const logger = require('../services/logger');
 const { toSqlUtc } = require('../utils/time');
 const { formatDateTimeInTimeZone } = require('../utils/time');
@@ -178,14 +179,14 @@ router.get('/', requireAuth, (req, res) => {
   });
 });
 
-router.post('/api/tg-unbind', requireAuth, (req, res) => {
+router.post('/api/tg-unbind', requireAuth, csrfProtection, (req, res) => {
   const user = db.getUserById(req.user.id);
   if (!user || !user.telegram_id) return res.json({ ok: false, error: '当前未绑定 Telegram' });
   db.getDb().prepare('UPDATE users SET telegram_id = NULL WHERE id = ?').run(user.id);
   res.json({ ok: true });
 });
 
-router.post('/api/tg-bind-token', requireAuth, (req, res) => {
+router.post('/api/tg-bind-token', requireAuth, csrfProtection, (req, res) => {
   const { generateBindToken, getBotUsername } = require('../services/tgbot');
   const botUsername = getBotUsername();
   if (!botUsername) return res.json({ ok: false, error: 'TG Bot 未配置' });

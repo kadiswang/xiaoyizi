@@ -83,9 +83,17 @@ function buildGameLimiter(windowMs, max) {
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => {
-      const tgUserId = String(req.body?.tgUserId || '').trim();
-      if (tgUserId) return `tg:${tgUserId}`;
-      return `ip:${getClientIp(req)}`;
+      // 优先用 IP 限流（不可伪造）。如果 tgUserId 同时存在且对应已绑定的真实用户，
+      // 则使用 IP+tgUserId 复合 key（让同 IP 不同账号也分别限流），
+      // 但 tgUserId 单独不能作为唯一 key —— 攻击者每次发不同 tgUserId 即绕过限流。
+      const ipKey = `ip:${getClientIp(req)}`;
+      const tgUserIdRaw = String(req.body?.tgUserId || '').trim();
+      if (!tgUserIdRaw || !/^\d{1,20}$/.test(tgUserIdRaw)) return ipKey;
+      try {
+        const exists = db.getDb().prepare('SELECT 1 FROM users WHERE telegram_id = ? LIMIT 1').get(tgUserIdRaw);
+        if (exists) return `${ipKey}|tg:${tgUserIdRaw}`;
+      } catch (_) { /* DB 暂不可用时回退 */ }
+      return ipKey;
     },
   });
 }
@@ -94,6 +102,20 @@ const gameRpsLimiter = buildGameLimiter(GAME_RPS_WINDOW_MS, GAME_RPS_MAX_REQ);
 const gameFlipLimiter = buildGameLimiter(GAME_FLIP_WINDOW_MS, GAME_FLIP_MAX_REQ);
 const gameLuckyLimiter = buildGameLimiter(GAME_LUCKY_WINDOW_MS, GAME_LUCKY_MAX_REQ);
 
+// 已登录 API per-user 限流（用于聚合查询路由）：每用户 60 秒 120 次
+const userApiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: { ok: false, error: '请求过于频繁，请稍后再试' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // 优先按 userId 限流（同账号多设备共享配额是合理的）
+    if (req.user?.id) return `user:${req.user.id}`;
+    return `ip:${getClientIp(req)}`;
+  },
+});
+
 module.exports = {
   subLimiter,
   adminLimiter,
@@ -101,4 +123,5 @@ module.exports = {
   gameRpsLimiter,
   gameFlipLimiter,
   gameLuckyLimiter,
+  userApiLimiter,
 };

@@ -9,53 +9,14 @@ function generateToken(req) {
   return req.session.csrfToken;
 }
 
-// 检查 Origin/Referer 是否匹配当前主机
-function isOriginAllowed(req) {
-  const origin = req.headers['origin'];
-  const referer = req.headers['referer'];
-  const host = req.headers['host'];
-  if (!host) return false;
-
-  // 优先检查 Origin
-  if (origin) {
-    try {
-      const url = new URL(origin);
-      return url.host === host;
-    } catch {
-      return false;
-    }
-  }
-
-  // 回退到 Referer
-  if (referer) {
-    try {
-      const url = new URL(referer);
-      return url.host === host;
-    } catch {
-      return false;
-    }
-  }
-
-  // 都没有则拒绝
-  return false;
-}
-
 // 验证 CSRF（POST/PUT/DELETE 请求）
 function csrfProtection(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
 
-  // JSON API：检查 Origin/Referer + CSRF Token
+  // JSON API：必须携带有效 CSRF token
   if (req.is('json')) {
-    // 同源请求仍需验证 CSRF token，防止 DNS rebinding 攻击
     const token = req.headers['x-csrf-token'];
     if (token && req.session.csrfToken && safeTokenEqual(token, req.session.csrfToken)) {
-      return next();
-    }
-    // 同源 + 无 token 的场景：首次会话尚未生成 CSRF token 时放行，
-    // 正常流程会先 GET 页面（csrfLocals 生成 token），此分支仅覆盖
-    // 极端情况（如 session 刚创建即发 JSON POST）。
-    if (isOriginAllowed(req) && !req.session.csrfToken) {
-      generateToken(req); // 立即生成 token，后续请求必须携带
       return next();
     }
     return res.status(403).json({ error: 'CSRF 校验失败：请刷新页面重试' });

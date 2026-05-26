@@ -12,7 +12,9 @@ function init(deps) {
 }
 
 function genSubToken() {
-  return crypto.randomBytes(16).toString('base64url');
+  // 24 字节 = 192 位熵，base64url 编码后 32 字符。
+  // 因 token 在 URL 中暴露，使用更高熵以防暴力预测。
+  return crypto.randomBytes(24).toString('base64url');
 }
 
 function getUserBySubToken(token) {
@@ -147,8 +149,14 @@ function getAllUsers() {
   `).all();
 }
 
+// 转义 SQLite LIKE 模式中的特殊字符，防止用户输入的 % 或 _ 被解释为通配符
+function escapeLikePattern(s) {
+  return String(s == null ? '' : s).replace(/[\\%_]/g, '\\$&');
+}
+
 function getAllUsersPaged(limit = 20, offset = 0, search = '', sortBy = 'total_traffic', sortDir = 'DESC') {
-  const where = search ? "WHERE u.username LIKE '%' || @search || '%' OR u.name LIKE '%' || @search || '%'" : '';
+  const escSearch = escapeLikePattern(search);
+  const where = search ? "WHERE (u.username LIKE '%' || @search || '%' ESCAPE '\\\\' OR u.name LIKE '%' || @search || '%' ESCAPE '\\\\')" : '';
   const allowedSorts = {
     id: 'u.id', username: 'u.username', trust_level: 'u.trust_level',
     total_traffic: 'total_traffic', expires_at: 'u.expires_at', last_login: 'u.last_login'
@@ -162,8 +170,8 @@ function getAllUsersPaged(limit = 20, offset = 0, search = '', sortBy = 'total_t
     ${where}
     ORDER BY ${orderCol} ${dir}
     LIMIT @limit OFFSET @offset
-  `).all({ limit, offset, search });
-  const total = _getDb().prepare(`SELECT COUNT(*) as c FROM users u ${where}`).get({ search }).c;
+  `).all({ limit, offset, search: escSearch });
+  const total = _getDb().prepare(`SELECT COUNT(*) as c FROM users u ${where}`).get({ search: escSearch }).c;
   return { rows, total };
 }
 

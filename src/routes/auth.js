@@ -296,13 +296,16 @@ router.post('/email-register', emailRegisterLimiter, async (req, res) => {
     emailCodes.delete(email);
     return fail('验证码错误次数过多，请重新发送');
   }
-  if (stored.code !== code) {
+  if (!safeTokenEqual(stored.code, code)) {
     stored.attempts++;
     return fail('验证码错误');
   }
 
   if (password.length < 8) {
     return fail('密码至少 8 位');
+  }
+  if (password.length > 128) {
+    return fail('密码长度不能超过 128 位');
   }
   if (password !== passwordConfirm) {
     return fail('两次密码不一致');
@@ -383,7 +386,7 @@ router.get('/forgot-password', (req, res) => {
   res.render('forgot-password', { nonce: res.locals.nonce || '' });
 });
 
-router.post('/forgot-send-code', emailLoginLimiter, async (req, res) => {
+router.post('/forgot-send-code', emailLoginLimiter, csrfProtection, async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   if (!isValidEmail(email)) return res.json({ ok: false, error: '邮箱格式不正确' });
   const user = db.getUserByEmail(email);
@@ -430,7 +433,7 @@ router.post('/forgot-send-code', emailLoginLimiter, async (req, res) => {
   }
 });
 
-router.post('/forgot-reset', emailLoginLimiter, (req, res) => {
+router.post('/forgot-reset', emailLoginLimiter, csrfProtection, (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const code = String(req.body?.code || '').trim();
   const password = String(req.body?.password || '');
@@ -445,11 +448,14 @@ router.post('/forgot-reset', emailLoginLimiter, (req, res) => {
     forgotCodes.delete(email);
     return res.json({ ok: false, error: '验证码错误次数过多，请重新发送' });
   }
-  if (stored.code !== code) {
+  if (!safeTokenEqual(stored.code, code)) {
     return res.json({ ok: false, error: '验证码错误' });
   }
   if (password.length < 8) {
     return res.json({ ok: false, error: '密码至少 8 位' });
+  }
+  if (password.length > 128) {
+    return res.json({ ok: false, error: '密码长度不能超过 128 位' });
   }
 
   const user = db.getUserByEmail(email);
@@ -494,6 +500,10 @@ router.post('/email-login', emailLoginLimiter, (req, res) => {
   const password = String(req.body?.password || '');
   if (!email || !password) {
     return res.redirect('/auth/login?error=' + encodeURIComponent('请输入邮箱和密码'));
+  }
+  // 防 scrypt DoS：拒绝超长密码（合法用户不会有这种密码）
+  if (password.length > 128) {
+    return res.redirect('/auth/login?error=' + encodeURIComponent('邮箱或密码错误'));
   }
   const user = db.getUserByEmail(email);
   if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {

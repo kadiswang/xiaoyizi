@@ -63,12 +63,16 @@ router.post('/users/:id/reset-token', (req, res) => {
   res.redirect('/admin#users');
 });
 
+// 流量限额上限：1 PB（Petabyte），防止数值溢出 Number.MAX_SAFE_INTEGER
+const MAX_TRAFFIC_LIMIT_GB = 1024 * 1024; // 1 PB = 1024 * 1024 GB
+
 router.post('/users/:id/traffic-limit', (req, res) => {
   const id = parseIntId(req.params.id);
   if (!id) return res.status(400).json({ error: '参数错误' });
   const user = db.getUserById(id);
   if (!user) return res.status(404).json({ error: '用户不存在' });
-  const limitGB = parseFloat(req.body.limit);
+  let limitGB = parseFloat(req.body.limit);
+  if (Number.isFinite(limitGB) && limitGB > MAX_TRAFFIC_LIMIT_GB) limitGB = MAX_TRAFFIC_LIMIT_GB;
   const limitBytes = (isNaN(limitGB) || limitGB < 0) ? -1 : Math.round(limitGB * 1073741824);
   db.setUserTrafficLimit(user.id, limitBytes);
   db.addAuditLog(req.user.id, 'traffic_limit', `设置 ${user.username} 流量限额: ${limitBytes < 0 ? '无限' : limitGB + ' GB'}`, req.clientIp || req.ip);
@@ -76,7 +80,8 @@ router.post('/users/:id/traffic-limit', (req, res) => {
 });
 
 router.post('/default-traffic-limit', (req, res) => {
-  const limitGB = parseFloat(req.body.limit);
+  let limitGB = parseFloat(req.body.limit);
+  if (Number.isFinite(limitGB) && limitGB > MAX_TRAFFIC_LIMIT_GB) limitGB = MAX_TRAFFIC_LIMIT_GB;
   const limitBytes = (isNaN(limitGB) || limitGB < 0) ? -1 : Math.round(limitGB * 1073741824);
   db.setSetting('default_traffic_limit', String(limitBytes));
   db.addAuditLog(req.user.id, 'default_traffic_limit', `设置默认流量限额: ${limitBytes < 0 ? '无限' : limitGB + ' GB'}`, req.clientIp || req.ip);

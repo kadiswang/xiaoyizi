@@ -34,6 +34,16 @@ function isPrivateOrLoopback(ip) {
   if (normalized.startsWith('127.')) return true;
   if (normalized.startsWith('10.')) return true;
   if (normalized.startsWith('192.168.')) return true;
+  // IPv4 link-local 169.254.0.0/16 — 含 AWS/GCP/Azure 元数据服务 169.254.169.254
+  if (normalized.startsWith('169.254.')) return true;
+  // CGNAT 100.64.0.0/10
+  const cgnat = normalized.match(/^100\.(\d{1,3})\./);
+  if (cgnat) {
+    const second = parseInt(cgnat[1], 10);
+    if (second >= 64 && second <= 127) return true;
+  }
+  // 0.0.0.0/8（包括 0.0.0.0 本身）
+  if (normalized.startsWith('0.')) return true;
   const m = normalized.match(/^172\.(\d{1,3})\./);
   if (m) {
     const second = parseInt(m[1], 10);
@@ -41,6 +51,8 @@ function isPrivateOrLoopback(ip) {
   }
   // Unique local / link local IPv6
   if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:')) return true;
+  // IPv6 unspecified ::、IPv4-mapped
+  if (normalized === '::' || normalized === '::ffff:0:0') return true;
   return false;
 }
 
@@ -103,4 +115,5 @@ module.exports = {
   normalizeIp,
   parseIpAllowlist,
   isIpAllowed,
+  isPrivateOrLoopback,
 };

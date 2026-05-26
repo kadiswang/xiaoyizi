@@ -4,6 +4,7 @@ const { verifyConnection, sendMail } = require('../../services/mailer');
 const { escapeHtml } = require('../../utils/escapeHtml');
 const { dateKeyInTimeZone, formatDateTimeInTimeZone, parseDateInput, normalizeLegacyLocalSqlToUtc } = require('../../utils/time');
 const { parseIntId } = require('../../utils/validators');
+const { encrypt } = require('../../utils/crypto');
 
 const router = express.Router();
 const ADMIN_STATS_CACHE_TTL_MS = Math.max(1000, parseInt(process.env.ADMIN_STATS_CACHE_TTL_MS || '5000', 10) || 5000);
@@ -111,7 +112,7 @@ router.post('/smtp/config', (req, res) => {
     db.setSetting('smtp_user', user);
     db.setSetting('smtp_from_name', fromName);
     db.setSetting('smtp_from_email', fromEmail);
-    if (pass) db.setSetting('smtp_pass', pass);
+    if (pass) db.setSetting('smtp_pass', encrypt(pass));
     db.addAuditLog(req.user.id, 'smtp_config_update', '更新 SMTP 配置', req.clientIp || req.ip);
     return res.json({ ok: true });
   } catch (err) {

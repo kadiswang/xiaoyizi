@@ -16,11 +16,21 @@ function escTg(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// 给 fetch 调用加统一超时（默认 8s），避免 TG API 长时间无响应阻塞
+const TG_FETCH_TIMEOUT_MS = 8000;
+async function tgFetch(url, init) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TG_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally { clearTimeout(timer); }
+}
+
 async function send(text) {
   const cfg = getConfig();
   if (!cfg) return;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${cfg.token}/sendMessage`, {
+    const res = await tgFetch(`https://api.telegram.org/bot${cfg.token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: cfg.chatId, text, parse_mode: 'HTML' })
@@ -29,7 +39,7 @@ async function send(text) {
       const body = await res.text().catch(() => '');
       logger.warn({ status: res.status, body }, 'TG send failed');
     }
-  } catch (e) { logger.error({ err: e }, 'TG send error'); }
+  } catch (e) { logger.error({ err: e.message }, 'TG send error'); }
 }
 
 async function sendToUser(telegramId, text) {
@@ -37,7 +47,7 @@ async function sendToUser(telegramId, text) {
   const token = process.env.TG_BOT_TOKEN || db.getSetting('tg_bot_token');
   if (!token || !telegramId) return false;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await tgFetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: telegramId, text, parse_mode: 'HTML' })

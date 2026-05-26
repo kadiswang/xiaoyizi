@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const db = require('./database');
 const logger = require('./logger');
+const { decrypt } = require('../utils/crypto');
 
 let _cachedKey = '';
 let _cachedTransporter = null;
@@ -18,7 +19,7 @@ function getConfig() {
     port: parseInt(db.getSetting('smtp_port') || '587', 10) || 587,
     secure: toBool(db.getSetting('smtp_secure'), false),
     user: (db.getSetting('smtp_user') || '').trim(),
-    pass: db.getSetting('smtp_pass') || '',
+    pass: decrypt(db.getSetting('smtp_pass')) || '',
     fromName: (db.getSetting('smtp_from_name') || 'VLESS Panel').trim(),
     fromEmail: (db.getSetting('smtp_from_email') || '').trim(),
   };
