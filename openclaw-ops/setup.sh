@@ -108,12 +108,23 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+const configDir = path.join(os.homedir(), '.openclaw');
+const configPath = path.join(configDir, 'openclaw.json');
 const workspace = process.env.OPENCLAW_SETUP_WORKSPACE;
 const prompt = 'Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.';
 
-const raw = fs.readFileSync(configPath, 'utf8');
-const json = JSON.parse(raw);
+// 首次安装时配置文件可能不存在，按需创建
+if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+let json = {};
+if (fs.existsSync(configPath)) {
+  try {
+    json = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (e) {
+    // 文件存在但损坏，回退到空对象（保持 setup 能继续）
+    console.warn('[setup] 现有 openclaw.json 解析失败，将重新创建');
+    json = {};
+  }
+}
 json.agents ||= {};
 json.agents.defaults ||= {};
 json.agents.defaults.workspace = workspace;

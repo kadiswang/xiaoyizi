@@ -290,14 +290,28 @@ setup_openclaw() {
   read -rp "$(echo -e "${C}安装 OpenClaw AI 运维?${N} (y/N): ")" ans
   [[ "$ans" =~ ^[yY]$ ]] || return
 
+  # OpenClaw 是可选辅助工具，失败不应阻塞主流程
+  # 临时关闭 -e 让本函数中的非致命错误不触发 trap on_error
+  set +e
+
   if ! command -v openclaw &>/dev/null; then
     ok "安装 OpenClaw..."
-    npm install -g openclaw --silent 2>/dev/null
+    npm install -g openclaw --silent
+    if ! command -v openclaw &>/dev/null; then
+      warn "OpenClaw 安装失败（非关键，已跳过）"
+      set -e
+      return 0
+    fi
   fi
 
   if [ -f "$INSTALL_DIR/openclaw-ops/setup.sh" ]; then
-    bash "$INSTALL_DIR/openclaw-ops/setup.sh" --force
+    if ! bash "$INSTALL_DIR/openclaw-ops/setup.sh" --force; then
+      warn "OpenClaw setup 出错（非关键，已跳过）"
+      warn "可稍后手动重试：bash $INSTALL_DIR/openclaw-ops/setup.sh --force"
+    fi
   fi
+
+  set -e
 
   echo ""
   info "后续步骤:"
